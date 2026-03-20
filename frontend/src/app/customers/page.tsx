@@ -7,6 +7,7 @@ import type { CustomerProfile, CustomerStats } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CustomerListSkeleton } from "@/components/Skeletons";
 
 const OBJ_COLORS: Record<string, string> = {
   low_latency: "border-cyan-500/40 text-cyan-400",
@@ -110,15 +111,11 @@ export default function CustomersPage() {
   }, []);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-muted-foreground text-sm animate-pulse">Loading customers...</div>
-      </div>
-    );
+    return <CustomerListSkeleton />;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Customers</h1>

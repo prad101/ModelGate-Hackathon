@@ -12,6 +12,7 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, AreaChart, Area, CartesianGrid,
 } from "recharts";
+import { ProfileSkeleton } from "@/components/Skeletons";
 
 const COLORS = ["#38bdf8", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c"];
 const TT_STYLE = { backgroundColor: "#1a1a2e", border: "1px solid #2a2a4a", borderRadius: "6px", fontSize: "11px" };
@@ -41,7 +42,7 @@ export default function CustomerProfilePage() {
   }, [id]);
 
   if (loading || !profile) {
-    return <div className="flex items-center justify-center h-[60vh]"><div className="text-muted-foreground text-sm animate-pulse">Loading profile...</div></div>;
+    return <ProfileSkeleton />;
   }
 
   const endpointUrl = `http://localhost:8000/v1/${profile.customer_id}/chat/completions`;
@@ -51,7 +52,7 @@ export default function CustomerProfilePage() {
   const hourlyData = stats?.hourly_requests.slice(-24) || [];
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

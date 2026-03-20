@@ -6,6 +6,7 @@ import type { ModelConfig } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { ModelsSkeleton } from "@/components/Skeletons";
 
 const PROVIDER_COLORS: Record<string, string> = {
   anthropic: "border-amber-500/40 text-amber-400",
@@ -49,18 +50,14 @@ export default function ModelsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-muted-foreground text-sm animate-pulse">Loading model registry...</div>
-      </div>
-    );
+    return <ModelsSkeleton />;
   }
 
   const enabledCount = models.filter((m) => m.enabled).length;
   const providers = [...new Set(models.map((m) => m.provider))];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Model Registry</h1>

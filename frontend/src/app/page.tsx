@@ -10,6 +10,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area, CartesianGrid,
 } from "recharts";
+import { DashboardSkeleton } from "@/components/Skeletons";
 
 const COLORS = ["#38bdf8", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c"];
 const TIER_COLORS: Record<string, string> = { simple: "#34d399", medium: "#fbbf24", complex: "#f87171" };
@@ -65,11 +66,7 @@ export default function DashboardPage() {
   }, []);
 
   if (loading || !stats) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="text-muted-foreground text-sm animate-pulse">Loading control plane...</div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const modelData = Object.entries(stats.model_distribution).map(([name, value]) => ({ name, value }));
@@ -78,7 +75,7 @@ export default function DashboardPage() {
   const customerData = Object.entries(stats.customer_request_counts).map(([name, count]) => ({ name, count }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

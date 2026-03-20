@@ -12,6 +12,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from "recharts";
+import { LogsSkeleton } from "@/components/Skeletons";
 
 const COLORS = ["#38bdf8", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c"];
 const TT_STYLE = { backgroundColor: "#1a1a2e", border: "1px solid #2a2a4a", borderRadius: "6px", fontSize: "11px" };
@@ -121,7 +122,7 @@ export default function CustomerLogsPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  if (loading) return <div className="flex items-center justify-center h-[60vh]"><div className="text-muted-foreground text-sm animate-pulse">Loading logs...</div></div>;
+  if (loading) return <LogsSkeleton />;
 
   const modelData = stats ? Object.entries(stats.model_distribution).map(([name, value]) => ({ name, value })) : [];
   const tierData = stats ? Object.entries(stats.requests_by_tier).map(([name, value]) => ({ name, value })) : [];
@@ -129,7 +130,7 @@ export default function CustomerLogsPage() {
   const filteredLogs = tierFilter === "all" ? logs : logs.filter((l) => l.classification === tierFilter);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-in fade-in duration-500">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-xl font-bold tracking-tight">{customer?.customer_name} — Request Logs</h1>

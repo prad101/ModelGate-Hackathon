@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { PlaygroundSkeleton } from "@/components/Skeletons";
 
 interface HistoryEntry {
   prompt: string;
@@ -36,6 +37,7 @@ function PlaygroundContent() {
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(true);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
@@ -43,8 +45,10 @@ function PlaygroundContent() {
       setCustomers(c);
       const pre = searchParams.get("customer");
       setSelectedCustomer(pre || (c.length > 0 ? c[0].customer_id : ""));
-    });
+    }).finally(() => setPageLoading(false));
   }, [searchParams]);
+
+  if (pageLoading) return <PlaygroundSkeleton />;
 
   const handleSend = async () => {
     if (!selectedCustomer || !prompt.trim()) return;
@@ -63,7 +67,7 @@ function PlaygroundContent() {
   const selected = customers.find((c) => c.customer_id === selectedCustomer);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-in fade-in duration-500">
       <div>
         <h1 className="text-xl font-bold tracking-tight">Playground</h1>
         <p className="text-xs text-muted-foreground mt-0.5">Test prompt routing in real-time</p>
