@@ -1,4 +1,4 @@
-MODEL_CATALOG: dict[str, dict] = {
+DEFAULT_MODELS: dict[str, dict] = {
     "claude-haiku": {
         "provider": "anthropic",
         "openrouter_id": "anthropic/claude-3-5-haiku-20241022",
@@ -79,23 +79,35 @@ MODEL_CATALOG: dict[str, dict] = {
 }
 
 
+def get_active_catalog() -> dict[str, dict]:
+    """Return DB models if any exist, otherwise return DEFAULT_MODELS."""
+    try:
+        from backend.database import get_global_models_full
+        db_models = get_global_models_full()
+        if db_models:
+            return db_models
+    except Exception:
+        pass
+    return DEFAULT_MODELS
+
+
 def get_model_info(model_name: str) -> dict | None:
-    return MODEL_CATALOG.get(model_name)
+    return get_active_catalog().get(model_name)
 
 
 def get_openrouter_id(model_name: str) -> str:
-    info = MODEL_CATALOG.get(model_name)
+    info = get_active_catalog().get(model_name)
     if info:
         return info["openrouter_id"]
     return model_name
 
 
 def get_models_for_tier(tier: str) -> list[str]:
-    return [name for name, info in MODEL_CATALOG.items() if info["tier"] == tier]
+    return [name for name, info in get_active_catalog().items() if info["tier"] == tier]
 
 
 def estimate_cost(model_name: str, input_tokens: int, output_tokens: int) -> float:
-    info = MODEL_CATALOG.get(model_name)
+    info = get_active_catalog().get(model_name)
     if not info:
         return 0.0
     input_cost = (input_tokens / 1_000_000) * info["cost_per_m_input"]
@@ -104,8 +116,8 @@ def estimate_cost(model_name: str, input_tokens: int, output_tokens: int) -> flo
 
 
 def get_all_providers() -> list[str]:
-    return list(set(info["provider"] for info in MODEL_CATALOG.values()))
+    return list(set(info["provider"] for info in get_active_catalog().values()))
 
 
 def get_all_model_names() -> list[str]:
-    return list(MODEL_CATALOG.keys())
+    return list(get_active_catalog().keys())

@@ -72,17 +72,19 @@ echo ""
 echo -e "${BOLD}Starting services...${RESET}"
 echo ""
 
-# Backend
+# Backend (single worker — model loaded once in lifespan, warmed up on GPU)
 cd "$PROJECT_DIR"
 source backend/venv/bin/activate
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 2>&1 | while IFS= read -r line; do
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 1 2>&1 | while IFS= read -r line; do
     echo -e "${GREEN}[backend]${RESET}  $line"
 done &
 BACKEND_PID=$!
 
-# Wait for backend to be ready
-for i in $(seq 1 30); do
+# Wait for backend to be ready (model load + warmup can take ~10s)
+echo -e "${YELLOW}[backend]${RESET}  Loading Arch Router 1.5B on GPU and warming up..."
+for i in $(seq 1 60); do
     if curl -s -o /dev/null http://localhost:8000/health 2>/dev/null; then
+        echo -e "${GREEN}[backend]${RESET}  Backend ready (model loaded)"
         break
     fi
     sleep 1

@@ -90,6 +90,15 @@ export interface ModelConfig {
   max_context: number;
 }
 
+export interface OpenRouterModel {
+  id: string;
+  name: string;
+  context_length: number;
+  cost_per_m_input: number;
+  cost_per_m_output: number;
+  provider: string;
+}
+
 export interface RoutingDecision {
   selected_provider: string;
   selected_model: string;

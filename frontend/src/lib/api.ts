@@ -4,6 +4,7 @@ import type {
   CustomerStats,
   GlobalStats,
   ModelConfig,
+  OpenRouterModel,
   RoutingDecision,
 } from "./types";
 
@@ -70,13 +71,19 @@ export const updateModel = (name: string, enabled: boolean, description = "") =>
     method: "PUT",
     body: JSON.stringify({ enabled, description }),
   });
+export const addModel = (data: Record<string, unknown>) =>
+  fetchJSON("/models", { method: "POST", body: JSON.stringify(data) });
+export const removeModel = (name: string) =>
+  fetchJSON(`/models/${name}`, { method: "DELETE" });
+export const searchOpenRouterModels = (query: string) =>
+  fetchJSON<OpenRouterModel[]>(`/models/openrouter/catalog?q=${encodeURIComponent(query)}`);
 
 // --- Proxy / Playground ---
 export async function sendPrompt(
   customerId: string,
   prompt: string
 ): Promise<{ response: string; routing: Record<string, string> }> {
-  const res = await fetch(`${getApiBase()}/v1/${customerId}/chat/completions`, {
+  const res = await fetch(`${getApiBase()}/${customerId}/v1/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

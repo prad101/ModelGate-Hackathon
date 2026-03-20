@@ -66,6 +66,9 @@ def init_db():
     conn.commit()
     conn.close()
 
+    # Seed default models if the table is empty
+    seed_default_models()
+
 
 # --- Customers ---
 
@@ -206,9 +209,10 @@ def get_customer_stats(customer_id: str) -> dict:
     successes = sum(1 for r in rows if (r.get("status") or "success") == "success")
 
     # Cost if everything went to the most expensive model
-    from backend.services.provider_registry import MODEL_CATALOG
-    premium_cost_input = max(m["cost_per_m_input"] for m in MODEL_CATALOG.values())
-    premium_cost_output = max(m["cost_per_m_output"] for m in MODEL_CATALOG.values())
+    from backend.services.provider_registry import get_active_catalog
+    catalog = get_active_catalog()
+    premium_cost_input = max(m["cost_per_m_input"] for m in catalog.values())
+    premium_cost_output = max(m["cost_per_m_output"] for m in catalog.values())
     premium_total = sum(
         ((r.get("input_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_cost_input +
         ((r.get("output_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_cost_output
@@ -300,9 +304,10 @@ def get_global_stats() -> dict:
     total_cost = sum(r["estimated_cost"] for r in rows)
     total_latency = sum(r["latency_ms"] for r in rows)
 
-    from backend.services.provider_registry import MODEL_CATALOG
-    premium_cost_input = max(m["cost_per_m_input"] for m in MODEL_CATALOG.values())
-    premium_cost_output = max(m["cost_per_m_output"] for m in MODEL_CATALOG.values())
+    from backend.services.provider_registry import get_active_catalog
+    catalog = get_active_catalog()
+    premium_cost_input = max(m["cost_per_m_input"] for m in catalog.values())
+    premium_cost_output = max(m["cost_per_m_output"] for m in catalog.values())
     premium_total = sum(
         ((r.get("input_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_cost_input +
         ((r.get("output_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_cost_output
@@ -347,43 +352,167 @@ def get_global_stats() -> dict:
 # --- Global Model Registry ---
 
 def get_global_models() -> list[dict]:
-    from backend.services.provider_registry import MODEL_CATALOG
+    """Return all models from DB with full metadata."""
     conn = get_connection()
     rows = conn.execute("SELECT * FROM global_models").fetchall()
     conn.close()
 
-    overrides = {r["model_name"]: dict(r) for r in rows}
+    if not rows:
+        # Fallback to DEFAULT_MODELS if DB is empty
+        from backend.services.provider_registry import DEFAULT_MODELS
+        result = []
+        for name, info in DEFAULT_MODELS.items():
+            entry = {
+                "model_name": name,
+                "enabled": True,
+                "description": info["description"],
+                **info,
+            }
+            result.append(entry)
+        return result
+
     result = []
-    for name, info in MODEL_CATALOG.items():
+    for r in rows:
+        row_dict = dict(r)
         entry = {
-            "model_name": name,
-            "enabled": True,
-            "description": info["description"],
-            **info,
+            "model_name": row_dict["model_name"],
+            "enabled": bool(row_dict["enabled"]),
+            "description": row_dict["description"],
         }
-        if name in overrides:
-            entry["enabled"] = bool(overrides[name]["enabled"])
-            if overrides[name]["description"]:
-                entry["description"] = overrides[name]["description"]
+        # Parse custom_config to get full metadata
+        try:
+            config = json.loads(row_dict.get("custom_config", "{}"))
+            entry.update(config)
+        except (json.JSONDecodeError, TypeError):
+            pass
         result.append(entry)
     return result
 
 
-def update_global_model(model_name: str, enabled: bool, description: str = ""):
+def get_global_models_full() -> dict:
+    """Return a dict keyed by model_name with full model metadata.
+    Used by provider_registry.get_active_catalog().
+    """
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM global_models").fetchall()
+    conn.close()
+
+    if not rows:
+        return {}
+
+    result = {}
+    for r in rows:
+        row_dict = dict(r)
+        model_name = row_dict["model_name"]
+        try:
+            config = json.loads(row_dict.get("custom_config", "{}"))
+        except (json.JSONDecodeError, TypeError):
+            config = {}
+
+        # Only include models that have full metadata in custom_config
+        if config and "provider" in config:
+            result[model_name] = config
+            # Ensure enabled status is tracked
+            if not row_dict["enabled"]:
+                result[model_name]["_enabled"] = False
+
+    return result
+
+
+def add_global_model(model_data: dict):
+    """Insert or replace a model with all its metadata stored as JSON in custom_config."""
+    model_name = model_data["model_name"]
+    description = model_data.get("description", "")
+
+    # Store all metadata fields in custom_config
+    config_fields = {
+        "provider": model_data.get("provider", "unknown"),
+        "openrouter_id": model_data.get("openrouter_id", model_name),
+        "tier": model_data.get("tier", "medium"),
+        "cost_per_m_input": model_data.get("cost_per_m_input", 1.0),
+        "cost_per_m_output": model_data.get("cost_per_m_output", 5.0),
+        "avg_latency_ms": model_data.get("avg_latency_ms", 500),
+        "regions": model_data.get("regions", ["US"]),
+        "max_context": model_data.get("max_context", 128000),
+        "description": description,
+    }
+
     conn = get_connection()
     conn.execute(
-        """INSERT OR REPLACE INTO global_models (model_name, enabled, description)
-        VALUES (?, ?, ?)""",
-        (model_name, int(enabled), description),
+        """INSERT OR REPLACE INTO global_models (model_name, enabled, description, custom_config)
+        VALUES (?, ?, ?, ?)""",
+        (model_name, 1, description, json.dumps(config_fields)),
     )
     conn.commit()
     conn.close()
 
 
+def remove_global_model(model_name: str) -> bool:
+    """Delete a model from the global_models table."""
+    conn = get_connection()
+    cursor = conn.execute("DELETE FROM global_models WHERE model_name = ?", (model_name,))
+    conn.commit()
+    conn.close()
+    return cursor.rowcount > 0
+
+
+def seed_default_models(default_models: dict | None = None):
+    """If global_models table is empty, seed it from the DEFAULT_MODELS dict."""
+    conn = get_connection()
+    count = conn.execute("SELECT COUNT(*) FROM global_models").fetchone()[0]
+    conn.close()
+
+    if count > 0:
+        return
+
+    # Lazy import to avoid circular dependency
+    if default_models is None:
+        from backend.services.provider_registry import DEFAULT_MODELS
+        default_models = DEFAULT_MODELS
+
+    for model_name, info in default_models.items():
+        model_data = {"model_name": model_name, **info}
+        add_global_model(model_data)
+
+
+def update_global_model(model_name: str, enabled: bool, description: str = ""):
+    conn = get_connection()
+    # Check if model exists
+    row = conn.execute("SELECT custom_config FROM global_models WHERE model_name = ?", (model_name,)).fetchone()
+    if row:
+        # Preserve existing custom_config, just update enabled and description
+        custom_config = row["custom_config"]
+        if description:
+            try:
+                config = json.loads(custom_config)
+                config["description"] = description
+                custom_config = json.dumps(config)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        conn.execute(
+            """UPDATE global_models SET enabled = ?, description = ?, custom_config = ?
+            WHERE model_name = ?""",
+            (int(enabled), description, custom_config, model_name),
+        )
+    else:
+        conn.execute(
+            """INSERT INTO global_models (model_name, enabled, description, custom_config)
+            VALUES (?, ?, ?, ?)""",
+            (model_name, int(enabled), description, "{}"),
+        )
+    conn.commit()
+    conn.close()
+
+
 def get_enabled_models() -> list[str]:
-    from backend.services.provider_registry import MODEL_CATALOG
+    """Return list of enabled model names from DB."""
     conn = get_connection()
     rows = conn.execute("SELECT model_name, enabled FROM global_models").fetchall()
     conn.close()
-    disabled = {r["model_name"] for r in rows if not r["enabled"]}
-    return [name for name in MODEL_CATALOG if name not in disabled]
+
+    if not rows:
+        # Fallback to DEFAULT_MODELS if DB is empty
+        from backend.services.provider_registry import DEFAULT_MODELS
+        return list(DEFAULT_MODELS.keys())
+
+    return [r["model_name"] for r in rows if r["enabled"]]

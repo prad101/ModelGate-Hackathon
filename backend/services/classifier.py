@@ -41,7 +41,14 @@ def load_classifier():
         )
         _model.eval()
         _model_loaded = True
-        logger.info("Classification model loaded successfully on GPU")
+        logger.info("Classification model loaded on GPU — running warmup...")
+
+        # Warmup: run one inference to JIT-compile CUDA kernels
+        warmup_prompt = _build_arch_prompt("Hello, what is your return policy?")
+        inputs = _tokenizer(warmup_prompt, return_tensors="pt").to(_model.device)
+        with torch.no_grad():
+            _model.generate(**inputs, max_new_tokens=20)
+        logger.info("Classification model warmed up and ready")
     except Exception as e:
         logger.warning(f"Failed to load classification model: {e}")
         logger.warning("Falling back to heuristic classifier")
@@ -121,24 +128,54 @@ def heuristic_classify(prompt: str) -> str:
         "analyze", "evaluate", "compare", "assess", "investigate",
         "multi", "comprehensive", "detailed analysis", "liability",
         "legal", "compliance", "financial", "strategy", "recommend",
-        "across multiple", "in-depth", "thoroughly",
+        "across multiple", "in-depth", "thoroughly", "architect",
+        "design", "implement", "build", "create", "develop", "write",
+        "refactor", "debug", "optimize", "security", "audit",
+        "research", "essay", "report", "review", "critique",
+        "feature rich", "production", "full", "complete", "entire",
+    ]
+    medium_keywords = [
+        "explain", "describe", "summarize", "translate", "convert",
+        "difference between", "how does", "why does", "list",
+        "steps to", "example of", "pros and cons", "rewrite",
     ]
     simple_keywords = [
-        "what is", "how do i", "where is", "when does", "status",
+        "what is", "where is", "when does", "status",
         "hello", "hi ", "hey", "thanks", "help", "faq", "return policy",
-        "hours", "price", "cost of",
+        "hours", "price", "cost of", "yes", "no", "ok", "sure",
     ]
 
     complex_score = sum(1 for kw in complex_keywords if kw in prompt_lower)
+    medium_score = sum(1 for kw in medium_keywords if kw in prompt_lower)
     simple_score = sum(1 for kw in simple_keywords if kw in prompt_lower)
 
-    if token_count < 15 and complex_score == 0:
+    # Code generation is always complex
+    code_signals = ["```", "code", "function", "class", "program", "script",
+                    "api", "database", "algorithm", "game", "app", "application"]
+    code_score = sum(1 for kw in code_signals if kw in prompt_lower)
+
+    # Short greetings/questions are simple
+    if token_count <= 5 and complex_score == 0 and code_score == 0 and medium_score == 0:
         return "simple"
-    if simple_score > 0 and complex_score == 0 and token_count < 30:
+    if simple_score > 0 and complex_score == 0 and code_score == 0 and medium_score == 0 and token_count < 20:
         return "simple"
-    if token_count > 80 or complex_score >= 2:
-        return "complex"
-    if complex_score >= 1 and token_count > 40:
+
+    # Code generation → complex
+    if code_score >= 1:
         return "complex"
 
-    return "medium"
+    # Multiple complex signals or long prompts
+    if complex_score >= 2:
+        return "complex"
+    if complex_score >= 1 and token_count > 25:
+        return "complex"
+    if token_count > 80:
+        return "complex"
+
+    # Medium signals
+    if medium_score >= 1 or token_count > 30:
+        return "medium"
+    if complex_score >= 1:
+        return "medium"
+
+    return "simple"

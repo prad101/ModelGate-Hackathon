@@ -1,7 +1,7 @@
 import logging
 from backend.models import CustomerProfile, RoutingDecision
 from backend.services.classifier import classify_prompt
-from backend.services.provider_registry import MODEL_CATALOG, get_model_info
+from backend.services.provider_registry import get_active_catalog, get_model_info
 from backend.database import get_enabled_models
 
 logger = logging.getLogger(__name__)
@@ -10,8 +10,8 @@ TIER_QUALITY_SCORES = {"simple": 1, "medium": 2, "complex": 3}
 TIER_ESCALATION = {"simple": "medium", "medium": "complex", "complex": "complex"}
 
 
-def route(profile: CustomerProfile, prompt: str) -> RoutingDecision:
-    classification = classify_prompt(prompt)
+def route(profile: CustomerProfile, prompt: str, tier_override: str | None = None) -> RoutingDecision:
+    classification = tier_override if tier_override else classify_prompt(prompt)
 
     candidates = list(profile.routing_preferences.get(classification, []))
     if not candidates:
@@ -66,7 +66,7 @@ def route(profile: CustomerProfile, prompt: str) -> RoutingDecision:
 
     # Last resort: pick any allowed and enabled model from the catalog
     if not valid_candidates:
-        for name, info in MODEL_CATALOG.items():
+        for name, info in get_active_catalog().items():
             if name in enabled_models and _passes_policy(info, profile):
                 valid_candidates.append(name)
                 break

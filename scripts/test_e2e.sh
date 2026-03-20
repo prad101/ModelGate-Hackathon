@@ -52,12 +52,15 @@ test_endpoint "Get ACME logs" GET "/logs/acme-support" "" "200"
 test_endpoint "Get ACME stats" GET "/stats/acme-support" "" "200"
 
 # Proxy - simple query
-test_endpoint "Proxy simple query" POST "/v1/acme-support/chat/completions" \
+test_endpoint "Proxy simple query" POST "/acme-support/v1/chat/completions" \
     '{"model":"auto","messages":[{"role":"user","content":"Hello"}]}' "200"
 
 # Proxy - nonexistent customer
-test_endpoint "Proxy nonexistent customer" POST "/v1/nonexistent/chat/completions" \
+test_endpoint "Proxy nonexistent customer" POST "/nonexistent/v1/chat/completions" \
     '{"model":"auto","messages":[{"role":"user","content":"Hello"}]}' "404"
+
+# Models endpoint
+test_endpoint "Customer models" GET "/acme-support/v1/models" "" "200"
 
 # Extraction (JSON)
 test_endpoint "Extract from text" POST "/extract" \

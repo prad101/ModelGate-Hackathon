@@ -6,7 +6,7 @@ import httpx
 
 from backend.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, EXTRACTION_MODEL, FALLBACK_PROFILES_DIR
 from backend.models import CustomerProfile, slugify
-from backend.services.provider_registry import MODEL_CATALOG
+from backend.services.provider_registry import get_active_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -28,8 +28,8 @@ Respond with ONLY valid JSON matching this exact schema:
   "constraints": {{
     "region": "EU-only" | "US-only" | "any",
     "privacy_tier": "low" | "standard" | "high",
-    "forbidden_providers": [...],
-    "allowed_providers": [...]
+    "forbidden_providers": ["PROVIDER names only, e.g.: anthropic, openai, google, deepseek, meta"],
+    "allowed_providers": ["PROVIDER names only, e.g.: anthropic, openai, google, deepseek, meta"]
   }},
   "performance": {{
     "latency_target_ms": <number>,
@@ -55,17 +55,33 @@ Rules:
 - For low_latency objective, prefer faster/cheaper models for simple queries
 - For high_quality objective, prefer stronger models even for medium queries
 - List warnings for any ambiguous or missing information
+- IMPORTANT: forbidden_providers and allowed_providers contain PROVIDER names (anthropic, openai, google, deepseek, meta), NOT model names
+- Available providers in this environment: {available_providers}
 - IMPORTANT: Only output raw JSON, no markdown code blocks"""
 
 
 async def extract_profile(
     customer_name: str, contract_text: str, custom_instructions: str = ""
 ) -> CustomerProfile:
-    model_names = ", ".join(MODEL_CATALOG.keys())
+    catalog = get_active_catalog()
+
+    # Build model details with provider info
+    model_details = []
+    for name, info in catalog.items():
+        model_details.append(f"{name} (provider: {info['provider']}, tier: {info['tier']})")
+    model_names = ", ".join(model_details)
+
+    # Compute available providers from the catalog
+    providers = set()
+    for info in catalog.values():
+        providers.add(info["provider"])
+    available_providers = ", ".join(sorted(providers))
+
     prompt = EXTRACTION_PROMPT.format(
         contract_text=contract_text,
         custom_instructions=custom_instructions or "None provided",
         available_models=model_names,
+        available_providers=available_providers,
     )
 
     try:

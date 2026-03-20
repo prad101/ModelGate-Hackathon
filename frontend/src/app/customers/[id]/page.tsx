@@ -121,7 +121,7 @@ export default function CustomerProfilePage() {
   };
 
   const copyEndpoint = () => {
-    const url = `${getApiBase()}/v1/${profile?.customer_id}/chat/completions`;
+    const url = `${getApiBase()}/${profile?.customer_id}/v1`;
     navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -131,7 +131,7 @@ export default function CustomerProfilePage() {
     return <ProfileSkeleton />;
   }
 
-  const endpointUrl = `${getApiBase()}/v1/${profile.customer_id}/chat/completions`;
+  const endpointBase = `${getApiBase()}/${profile.customer_id}/v1`;
   const modelData = stats ? Object.entries(stats.model_distribution).map(([name, value]) => ({ name, value })) : [];
   const costData = stats ? Object.entries(stats.cost_by_model).map(([name, cost]) => ({ name, cost: Number(cost.toFixed(6)) })) : [];
   const latencyData = stats ? Object.entries(stats.latency_by_model).map(([name, ms]) => ({ name, ms })) : [];
@@ -211,13 +211,15 @@ export default function CustomerProfilePage() {
       <div className="relative bg-primary/5 border-2 border-primary/30 rounded-lg px-4 py-4 glow-cyan">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] uppercase tracking-widest text-primary mb-1.5 font-medium">Customer API Endpoint</div>
+            <div className="text-[10px] uppercase tracking-widest text-primary mb-1.5 font-medium">Customer API Base URL</div>
             <div className="flex items-center gap-2">
-              <code className="text-sm font-mono text-foreground break-all">
-                <span className="text-primary font-semibold">POST</span>{" "}{endpointUrl}
-              </code>
+              <code className="text-sm font-mono text-foreground break-all">{endpointBase}</code>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1.5">Drop-in replacement for any OpenAI-compatible API call. Just change the URL.</p>
+            <div className="mt-2 space-y-1">
+              <div className="text-[10px] font-mono text-muted-foreground"><span className="text-green-400">POST</span> /chat/completions <span className="text-muted-foreground/50">— send prompts</span></div>
+              <div className="text-[10px] font-mono text-muted-foreground"><span className="text-cyan-400">GET</span>{"  "}/models <span className="text-muted-foreground/50">— list available service tiers</span></div>
+            </div>
+            <p className="text-[10px] text-muted-foreground mt-1.5">Drop-in replacement for <code className="text-[10px]">https://api.openai.com/v1</code> — works with any OpenAI SDK.</p>
           </div>
           <Button
             size="sm"

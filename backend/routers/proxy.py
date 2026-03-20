@@ -8,17 +8,63 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 
 from backend.models import ChatCompletionRequest
-from backend.database import get_customer, save_request_log
+from backend.database import get_customer
 from backend.services.router_engine import route
 from backend.services.provider_registry import get_openrouter_id, estimate_cost
 from backend.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL
+from backend.database import save_request_log
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["proxy"])
 
+# Tier descriptions for the /models endpoint
+TIER_DESCRIPTIONS = {
+    "simple": "Fast, cost-efficient responses for routine queries",
+    "medium": "Balanced quality and speed for standard tasks",
+    "complex": "Maximum capability for complex reasoning and analysis",
+}
 
-@router.post("/v1/{customer_id}/chat/completions")
+# Map model field values to tier names
+TIER_MODEL_MAP = {
+    "modelgate-simple": "simple",
+    "modelgate-medium": "medium",
+    "modelgate-complex": "complex",
+}
+
+
+@router.get("/{customer_id}/v1/models")
+async def list_models(customer_id: str):
+    """OpenAI-compatible /models endpoint returning abstract service tiers."""
+    profile = get_customer(customer_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail=f"Customer '{customer_id}' not found")
+
+    created = int(datetime.fromisoformat(profile.created_at.replace("Z", "+00:00")).timestamp()) if profile.created_at else 1711000000
+
+    models = [
+        {
+            "id": "auto",
+            "object": "model",
+            "created": created,
+            "owned_by": "modelgate",
+            "description": "Automatic routing — ModelGate classifies your prompt and selects the optimal tier",
+        }
+    ]
+
+    for tier in profile.routing_preferences:
+        models.append({
+            "id": f"modelgate-{tier}",
+            "object": "model",
+            "created": created,
+            "owned_by": "modelgate",
+            "description": TIER_DESCRIPTIONS.get(tier, f"Service tier: {tier}"),
+        })
+
+    return {"object": "list", "data": models}
+
+
+@router.post("/{customer_id}/v1/chat/completions")
 async def chat_completions(customer_id: str, request: ChatCompletionRequest):
     profile = get_customer(customer_id)
     if not profile:
@@ -33,9 +79,12 @@ async def chat_completions(customer_id: str, request: ChatCompletionRequest):
     if not user_prompt:
         raise HTTPException(status_code=400, detail="No user message found")
 
+    # Resolve tier from model field
+    tier_override = TIER_MODEL_MAP.get(request.model, None)
+
     # Classify + Route
     classify_start = time.time()
-    decision = route(profile, user_prompt)
+    decision = route(profile, user_prompt, tier_override=tier_override)
     classify_ms = int((time.time() - classify_start) * 1000)
     openrouter_model = get_openrouter_id(decision.selected_model)
 
