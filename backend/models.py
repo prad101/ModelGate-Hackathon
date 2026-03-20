@@ -45,6 +45,12 @@ class RequestLogEntry(BaseModel):
     latency_ms: int
     estimated_cost: float
     tokens_used: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    ttft_ms: int = 0
+    status: str = "success"
+    candidates_considered: list[str] = []
+    candidates_eliminated: dict[str, str] = {}
 
     def model_post_init(self, __context):
         if not self.timestamp:
@@ -69,10 +75,21 @@ class ExtractionRequest(BaseModel):
 class CustomerStats(BaseModel):
     total_requests: int
     avg_latency_ms: float
+    p95_latency_ms: float = 0.0
+    p99_latency_ms: float = 0.0
     total_cost: float
     cost_savings_vs_premium: float
-    model_distribution: dict[str, int]
-    requests_by_tier: dict[str, int]
+    total_tokens: int = 0
+    total_input_tokens: int = 0
+    total_output_tokens: int = 0
+    avg_ttft_ms: float = 0.0
+    success_rate: float = 100.0
+    model_distribution: dict[str, int] = {}
+    requests_by_tier: dict[str, int] = {}
+    provider_distribution: dict[str, int] = {}
+    cost_by_model: dict[str, float] = {}
+    latency_by_model: dict[str, float] = {}
+    hourly_requests: list[dict] = []
 
 
 class ChatCompletionRequest(BaseModel):

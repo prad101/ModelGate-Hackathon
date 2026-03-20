@@ -7,7 +7,7 @@ import type {
   RoutingDecision,
 } from "./types";
 
-function getApiBase() {
+export function getApiBase() {
   if (typeof window !== "undefined") {
     return `http://${window.location.hostname}:8000`;
   }
@@ -31,6 +31,11 @@ export const getCustomers = () => fetchJSON<CustomerProfile[]>("/customers");
 export const getCustomer = (id: string) => fetchJSON<CustomerProfile>(`/customers/${id}`);
 export const deleteCustomer = (id: string) =>
   fetchJSON(`/customers/${id}`, { method: "DELETE" });
+export const updateCustomer = (id: string, data: Partial<CustomerProfile>) =>
+  fetchJSON<CustomerProfile>(`/customers/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
 
 export async function extractProfile(
   file: File,

@@ -6,6 +6,7 @@ import httpx
 
 from backend.config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, EXTRACTION_MODEL, FALLBACK_PROFILES_DIR
 from backend.models import CustomerProfile, slugify
+from backend.services.provider_registry import MODEL_CATALOG
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ Respond with ONLY valid JSON matching this exact schema:
   "warnings": ["any concerns or ambiguities found in the contract"]
 }}
 
-Available models: claude-haiku, gpt-4o-mini, claude-sonnet, gpt-4o, gemini-2.0-flash, gemini-2.5-pro, deepseek-v3
+Available models: {available_models}
 
 Rules:
 - If the contract mentions GDPR, EU data residency, or European customers, set region to "EU-only"
@@ -60,9 +61,11 @@ Rules:
 async def extract_profile(
     customer_name: str, contract_text: str, custom_instructions: str = ""
 ) -> CustomerProfile:
+    model_names = ", ".join(MODEL_CATALOG.keys())
     prompt = EXTRACTION_PROMPT.format(
         contract_text=contract_text,
         custom_instructions=custom_instructions or "None provided",
+        available_models=model_names,
     )
 
     try:

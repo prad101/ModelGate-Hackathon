@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { getCustomers, sendPrompt } from "@/lib/api";
-import type { CustomerProfile } from "@/lib/types";
+import { getCustomers, getModels, sendPrompt } from "@/lib/api";
+import type { CustomerProfile, ModelConfig } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +16,15 @@ interface HistoryEntry {
   routing: Record<string, string>;
   timestamp: string;
 }
+
+// The most expensive model that would be used without ModelGate
+const PREMIUM_MODEL = {
+  name: "gemini-2.5-pro",
+  provider: "google",
+  cost_per_m_input: 2.50,
+  cost_per_m_output: 15.00,
+  avg_latency_ms: 1500,
+};
 
 export default function PlaygroundPage() {
   return (
@@ -34,6 +43,7 @@ const QUICK_PROMPTS = [
 function PlaygroundContent() {
   const searchParams = useSearchParams();
   const [customers, setCustomers] = useState<CustomerProfile[]>([]);
+  const [allModels, setAllModels] = useState<ModelConfig[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,8 +51,9 @@ function PlaygroundContent() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
-    getCustomers().then((c) => {
+    Promise.all([getCustomers(), getModels()]).then(([c, m]) => {
       setCustomers(c);
+      setAllModels(m);
       const pre = searchParams.get("customer");
       setSelectedCustomer(pre || (c.length > 0 ? c[0].customer_id : ""));
     }).finally(() => setPageLoading(false));
@@ -65,6 +76,14 @@ function PlaygroundContent() {
   };
 
   const selected = customers.find((c) => c.customer_id === selectedCustomer);
+
+  // Find the most expensive model for "without ModelGate" comparison
+  const premiumModelRaw = allModels.length > 0
+    ? allModels.reduce((prev, curr) => curr.cost_per_m_input > prev.cost_per_m_input ? curr : prev, allModels[0])
+    : null;
+  const premiumModel = premiumModelRaw
+    ? { name: premiumModelRaw.model_name, provider: premiumModelRaw.provider, cost_per_m_input: premiumModelRaw.cost_per_m_input, cost_per_m_output: premiumModelRaw.cost_per_m_output, avg_latency_ms: premiumModelRaw.avg_latency_ms }
+    : null;
 
   return (
     <div className="space-y-5 animate-in fade-in duration-500">
@@ -162,64 +181,135 @@ function PlaygroundContent() {
               </CardContent>
             </Card>
           ) : (
-            history.map((entry, i) => (
-              <Card key={i} className={`bg-card/50 border-border/50 ${i === 0 ? "glow-cyan" : ""}`}>
-                <CardContent className="pt-4 space-y-3">
-                  {/* Routing decision panel */}
-                  <div className="bg-secondary/30 rounded-lg p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-[9px] uppercase tracking-widest text-muted-foreground">Routing Decision</div>
-                      <span className="text-[10px] text-muted-foreground font-mono">{entry.timestamp}</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <Badge variant="outline" className={`text-[9px] ${
-                        entry.routing.classification === "simple" ? "border-green-500/30 text-green-400"
-                        : entry.routing.classification === "complex" ? "border-red-500/30 text-red-400"
-                        : "border-amber-500/30 text-amber-400"
-                      }`}>{entry.routing.classification}</Badge>
-                      <Badge variant="outline" className="text-[9px] border-primary/30 text-primary">{entry.routing.model || entry.routing.selected_model}</Badge>
-                      {entry.routing.selected_provider && <Badge variant="outline" className="text-[9px]">{entry.routing.selected_provider}</Badge>}
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                      {[
-                        { label: "Total Latency", value: `${entry.routing.latency || entry.routing.latency_ms || "?"}ms` },
-                        { label: "TTFT", value: `${entry.routing.ttft || entry.routing.ttft_ms || "?"}ms` },
-                        { label: "Classify", value: `${entry.routing.classifyMs || entry.routing.classify_ms || "?"}ms` },
-                        { label: "Cost", value: `$${Number(entry.routing.cost || 0).toFixed(6)}` },
-                      ].map(({ label, value }) => (
-                        <div key={label} className="bg-secondary/40 rounded px-2 py-1">
-                          <div className="text-[8px] uppercase tracking-widest text-muted-foreground">{label}</div>
-                          <div className="text-[11px] font-mono">{value}</div>
-                        </div>
-                      ))}
-                    </div>
-                    {entry.routing.reason && (
-                      <div className="text-[10px] text-muted-foreground">
-                        <span className="text-foreground font-medium">Why: </span>{entry.routing.reason}
+            history.map((entry, i) => {
+              const actualModel = entry.routing.model || entry.routing.selected_model || "unknown";
+              const actualModelInfo = allModels.find(m => m.model_name === actualModel);
+              const actualCost = Number(entry.routing.cost || 0);
+              const inputTokens = Number(entry.routing.input_tokens || 0);
+              const outputTokens = Number(entry.routing.output_tokens || 0);
+
+              // Compute "without ModelGate" cost: same tokens through premium model
+              const premiumRef = premiumModel || PREMIUM_MODEL;
+              const premiumCost = inputTokens > 0
+                ? (inputTokens / 1_000_000) * premiumRef.cost_per_m_input + (outputTokens / 1_000_000) * premiumRef.cost_per_m_output
+                : actualCost * 3; // fallback estimate
+              const savings = premiumCost - actualCost;
+              const savingsPercent = premiumCost > 0 ? ((savings / premiumCost) * 100) : 0;
+
+              return (
+                <Card key={i} className={`bg-card/50 border-border/50 ${i === 0 ? "glow-cyan" : ""}`}>
+                  <CardContent className="pt-4 space-y-3">
+                    {/* Routing decision panel */}
+                    <div className="bg-secondary/30 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-[9px] uppercase tracking-widest text-muted-foreground">Routing Decision</div>
+                        <span className="text-[10px] text-muted-foreground font-mono">{entry.timestamp}</span>
                       </div>
-                    )}
-                    {entry.routing.candidates_eliminated && typeof entry.routing.candidates_eliminated === "object" && Object.keys(entry.routing.candidates_eliminated).length > 0 && (
-                      <div className="text-[10px]">
-                        <span className="text-muted-foreground">Eliminated: </span>
-                        {Object.entries(entry.routing.candidates_eliminated).map(([m, r]) => (
-                          <span key={m} className="text-red-400">{m} ({String(r)}) </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        <Badge variant="outline" className={`text-[9px] ${
+                          entry.routing.classification === "simple" ? "border-green-500/30 text-green-400"
+                          : entry.routing.classification === "complex" ? "border-red-500/30 text-red-400"
+                          : "border-amber-500/30 text-amber-400"
+                        }`}>{entry.routing.classification}</Badge>
+                        <Badge variant="outline" className="text-[9px] border-primary/30 text-primary">{actualModel}</Badge>
+                        {entry.routing.selected_provider && <Badge variant="outline" className="text-[9px]">{entry.routing.selected_provider}</Badge>}
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {[
+                          { label: "Total Latency", value: `${entry.routing.latency || entry.routing.latency_ms || "?"}ms` },
+                          { label: "TTFT", value: `${entry.routing.ttft || entry.routing.ttft_ms || "?"}ms` },
+                          { label: "Classify", value: `${entry.routing.classifyMs || entry.routing.classify_ms || "?"}ms` },
+                          { label: "Cost", value: `$${actualCost.toFixed(6)}` },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="bg-secondary/40 rounded px-2 py-1">
+                            <div className="text-[8px] uppercase tracking-widest text-muted-foreground">{label}</div>
+                            <div className="text-[11px] font-mono">{value}</div>
+                          </div>
                         ))}
                       </div>
+                      {entry.routing.reason && (
+                        <div className="text-[10px] text-muted-foreground">
+                          <span className="text-foreground font-medium">Why: </span>{entry.routing.reason}
+                        </div>
+                      )}
+                      {entry.routing.candidates_eliminated && typeof entry.routing.candidates_eliminated === "object" && Object.keys(entry.routing.candidates_eliminated).length > 0 && (
+                        <div className="text-[10px]">
+                          <span className="text-muted-foreground">Eliminated: </span>
+                          {Object.entries(entry.routing.candidates_eliminated).map(([m, r]) => (
+                            <span key={m} className="text-red-400">{m} ({String(r)}) </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Side-by-side comparison (Fix #9) */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-2.5">
+                        <div className="text-[8px] uppercase tracking-widest text-green-400 mb-1.5 font-medium">With ModelGate</div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground">Model</span>
+                            <span className="text-[10px] font-mono text-green-400">{actualModel}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground">Provider</span>
+                            <span className="text-[10px] font-mono">{entry.routing.selected_provider || actualModelInfo?.provider || "?"}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground">Cost</span>
+                            <span className="text-[10px] font-mono text-green-400">${actualCost.toFixed(6)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground">Avg Latency</span>
+                            <span className="text-[10px] font-mono">{actualModelInfo?.avg_latency_ms || entry.routing.latency || "?"}ms</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-2.5">
+                        <div className="text-[8px] uppercase tracking-widest text-red-400 mb-1.5 font-medium">Without ModelGate</div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground">Model</span>
+                            <span className="text-[10px] font-mono text-red-400">{premiumRef.name || "premium"}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground">Provider</span>
+                            <span className="text-[10px] font-mono">{premiumRef.provider || "?"}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground">Cost</span>
+                            <span className="text-[10px] font-mono text-red-400">${premiumCost.toFixed(6)}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-muted-foreground">Avg Latency</span>
+                            <span className="text-[10px] font-mono">{premiumRef.avg_latency_ms}ms</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Savings badge */}
+                    {savings > 0 && (
+                      <div className="flex items-center justify-center gap-2 py-1">
+                        <Badge className="bg-green-500/15 text-green-400 border-green-500/30 text-[10px]">
+                          Saved ${savings.toFixed(6)} ({savingsPercent.toFixed(0)}% less)
+                        </Badge>
+                      </div>
                     )}
-                  </div>
 
-                  {/* Prompt */}
-                  <div className="text-xs">
-                    <span className="text-muted-foreground font-medium">Prompt: </span>{entry.prompt}
-                  </div>
+                    {/* Prompt */}
+                    <div className="text-xs">
+                      <span className="text-muted-foreground font-medium">Prompt: </span>{entry.prompt}
+                    </div>
 
-                  {/* Response */}
-                  <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-y-auto">
-                    {entry.response}
-                  </div>
-                </CardContent>
-              </Card>
-            ))
+                    {/* Response */}
+                    <div className="bg-primary/5 border border-primary/10 rounded-lg p-3 text-xs leading-relaxed whitespace-pre-wrap max-h-[300px] overflow-y-auto">
+                      {entry.response}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
           )}
         </div>
       </div>

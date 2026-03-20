@@ -2,6 +2,7 @@ import logging
 from backend.models import CustomerProfile, RoutingDecision
 from backend.services.classifier import classify_prompt
 from backend.services.provider_registry import MODEL_CATALOG, get_model_info
+from backend.database import get_enabled_models
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +17,17 @@ def route(profile: CustomerProfile, prompt: str) -> RoutingDecision:
     if not candidates:
         candidates = _get_default_candidates(classification)
 
+    # Get the set of enabled models (respects admin toggles)
+    enabled_models = set(get_enabled_models())
+
     eliminated: dict[str, str] = {}
     valid_candidates: list[str] = []
 
     for model_name in candidates:
+        if model_name not in enabled_models:
+            eliminated[model_name] = "model disabled by admin"
+            continue
+
         model_info = get_model_info(model_name)
         if model_info is None:
             eliminated[model_name] = "model not found in registry"
@@ -51,15 +59,15 @@ def route(profile: CustomerProfile, prompt: str) -> RoutingDecision:
         next_tier = TIER_ESCALATION.get(classification, "complex")
         escalation_candidates = profile.routing_preferences.get(next_tier, [])
         for model_name in escalation_candidates:
-            if model_name not in eliminated:
+            if model_name not in eliminated and model_name in enabled_models:
                 model_info = get_model_info(model_name)
                 if model_info and _passes_policy(model_info, profile):
                     valid_candidates.append(model_name)
 
-    # Last resort: pick any allowed model from the catalog
+    # Last resort: pick any allowed and enabled model from the catalog
     if not valid_candidates:
         for name, info in MODEL_CATALOG.items():
-            if _passes_policy(info, profile):
+            if name in enabled_models and _passes_policy(info, profile):
                 valid_candidates.append(name)
                 break
 
@@ -124,7 +132,7 @@ def _score_and_select(candidates: list[str], profile: CustomerProfile) -> str:
         if profile.objective == "low_latency":
             score += (1.0 / max(info["avg_latency_ms"], 1)) * 10000
         elif profile.objective == "low_cost":
-            score += (1.0 / max(info["cost_per_1k_input"], 0.00001)) * 0.01
+            score += (1.0 / max(info["cost_per_m_input"], 0.00001)) * 0.01
         elif profile.objective == "high_quality":
             score += TIER_QUALITY_SCORES.get(info["tier"], 1) * 10
 
@@ -132,7 +140,7 @@ def _score_and_select(candidates: list[str], profile: CustomerProfile) -> str:
             score += 5
 
         if profile.performance.cost_sensitivity == "high":
-            score += (1.0 / max(info["cost_per_1k_input"], 0.00001)) * 0.001
+            score += (1.0 / max(info["cost_per_m_input"], 0.00001)) * 0.001
 
         scores[name] = score
 
