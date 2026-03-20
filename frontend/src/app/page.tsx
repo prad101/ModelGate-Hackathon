@@ -6,6 +6,7 @@ import { getGlobalStats, getAllLogs } from "@/lib/api";
 import type { GlobalStats, RequestLogEntry } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area, CartesianGrid,
@@ -73,6 +74,7 @@ export default function DashboardPage() {
   const providerData = Object.entries(stats.provider_distribution).map(([name, value]) => ({ name, value }));
   const hourlyData = stats.hourly_requests.slice(-24);
   const customerData = Object.entries(stats.customer_request_counts).map(([name, count]) => ({ name, count }));
+  const hasData = stats.total_requests > 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -83,10 +85,47 @@ export default function DashboardPage() {
           <p className="text-xs text-muted-foreground mt-0.5">Real-time AI inference monitoring and routing analytics</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse-dot" />
-          <span className="text-xs text-muted-foreground font-mono">ALL SYSTEMS OPERATIONAL</span>
+          <span className={`h-2 w-2 rounded-full ${hasData ? "bg-green-500 animate-pulse-dot" : "bg-amber-500"}`} />
+          <span className="text-xs text-muted-foreground font-mono">{hasData ? "ALL SYSTEMS OPERATIONAL" : "AWAITING FIRST REQUEST"}</span>
         </div>
       </div>
+
+      {/* Empty state */}
+      {!hasData && (
+        <Card className="bg-card/50 border-border/50">
+          <CardContent className="py-16 text-center space-y-4">
+            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+              <svg className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">
+                {stats.total_customers === 0 ? "Welcome to ModelGate" : "No Requests Yet"}
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+                {stats.total_customers === 0
+                  ? "Get started by configuring your model registry and onboarding your first customer. Upload a contract to automatically generate an AI routing profile."
+                  : "You have customers configured but no requests have been routed yet. Use the Playground to send your first test prompt, or point an application at a customer endpoint."}
+              </p>
+            </div>
+            <div className="flex justify-center gap-3 pt-2">
+              {stats.total_customers === 0 ? (
+                <>
+                  <Link href="/models">
+                    <Button variant="outline" size="sm" className="text-xs">Configure Models</Button>
+                  </Link>
+                  <Link href="/customers/new">
+                    <Button size="sm" className="text-xs">Onboard First Customer</Button>
+                  </Link>
+                </>
+              ) : (
+                <Link href="/playground">
+                  <Button size="sm" className="text-xs">Open Playground</Button>
+                </Link>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -108,7 +147,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Cost savings banner */}
-      {stats.cost_savings_vs_premium > 0 && (
+      {hasData && stats.cost_savings_vs_premium > 0 && (
         <Card className="bg-card/50 border-green-500/20 glow-green">
           <CardContent className="py-5">
             <div className="flex items-center justify-between">
@@ -141,7 +180,7 @@ export default function DashboardPage() {
       )}
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {hasData && (<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Request timeline */}
         <Card className="lg:col-span-2 bg-card/50 border-border/50">
           <CardHeader className="pb-2">
@@ -198,10 +237,10 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </div>)}
 
       {/* Bottom row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {hasData && (<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Provider breakdown */}
         <Card className="bg-card/50 border-border/50">
           <CardHeader className="pb-2">
@@ -258,7 +297,7 @@ export default function DashboardPage() {
             <LiveFeed logs={logs} />
           </CardContent>
         </Card>
-      </div>
+      </div>)}
     </div>
   );
 }
