@@ -10,7 +10,7 @@ import { CustomerListSkeleton } from "@/components/Skeletons";
 
 const OBJ_COLORS: Record<string, string> = {
   low_latency: "border-sky-300/50 text-sky-700 bg-sky-100/50",
-  high_quality: "border-indigo-300/50 text-indigo-700 bg-indigo-100/50",
+  high_quality: "border-blue-300/50 text-blue-700 bg-blue-100/50",
   low_cost: "border-emerald-300/50 text-emerald-700 bg-emerald-100/50",
 };
 
@@ -111,38 +111,30 @@ export default function CustomersPage() {
   }
 
   return (
-    <div className="animate-in fade-in duration-700 pb-20">
-      {/* Hero Section */}
-      <section className="pt-16 pb-12 mb-8 border-b border-slate-200/50 subtle-gradient-bg px-2 sm:px-4 rounded-3xl mx-[-0.5rem] sm:mx-[-1rem]">
-        <div className="max-w-4xl px-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100/80 border border-slate-200 text-xs font-medium text-slate-600 mb-6 shadow-sm">
-            <svg className="w-3.5 h-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" /></svg>
-            Client Configuration
+    <div className="animate-in fade-in duration-700 pb-12 space-y-5">
+      {/* Enterprise Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-slate-200/80">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Clients</h1>
+            <Badge variant="outline" className="bg-white text-[10px] border-slate-200 text-slate-500 font-mono">
+              {customers.length} ACTIVE
+            </Badge>
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-slate-900 mb-4">
-            Enterprise Client Routing
-          </h1>
-          <p className="text-lg text-slate-500 mb-8 max-w-2xl leading-relaxed">
-            Manage dedicated AI routing profiles. Tailor performance targets, enforce regional privacy constraints, and track traffic utilization per client.
-          </p>
-          <div className="flex items-center gap-4">
-            <Link href="/customers/new">
-              <Button className="h-11 px-7 rounded-full bg-slate-900 hover:bg-slate-800 text-white shadow-md transition-all focus:ring-2 focus:ring-slate-400 focus:ring-offset-2">
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                Onboard Client
-              </Button>
-            </Link>
-          </div>
+          <p className="text-xs text-slate-500 font-medium">Manage dedicated AI routing profiles and regional constraints.</p>
         </div>
-      </section>
+        <div className="flex items-center gap-3">
+          <Link href="/customers/new">
+            <Button size="sm" className="h-7 text-xs bg-slate-900 text-white hover:bg-slate-800 shadow-sm">
+              <svg className="w-3.5 h-3.5 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+              Onboard Client
+            </Button>
+          </Link>
+        </div>
+      </div>
 
       {/* Content Section */}
-      <section className="max-w-5xl px-2">
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-lg font-semibold text-slate-800">Active Clients ({customers.length})</h2>
-          <div className="text-sm text-slate-400 font-medium">Sorted by addition date</div>
-        </div>
-
+      <section className="w-full">
         {customers.length === 0 ? (
           <div className="py-24 text-center border-2 border-dashed border-slate-300/80 rounded-3xl bg-slate-100/60 hover:bg-slate-100 transition-colors">
             <div className="mx-auto w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center mb-4 shadow-sm">

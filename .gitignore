@@ -2,6 +2,17 @@
 .env
 *.env.local
 
+# Da models
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# More cache
+*.cache
+*/.cache/*
+
 # Python
 __pycache__/
 *.py[cod]

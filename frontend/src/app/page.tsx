@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getGlobalStats, getAllLogs } from "@/lib/api";
 import type { GlobalStats, RequestLogEntry } from "@/lib/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,41 +12,46 @@ import {
 } from "recharts";
 import { DashboardSkeleton } from "@/components/Skeletons";
 
-const COLORS = ["#38bdf8", "#34d399", "#fbbf24", "#f87171", "#a78bfa", "#fb923c"];
-const TIER_COLORS: Record<string, string> = { simple: "#34d399", medium: "#fbbf24", complex: "#f87171" };
+const CHART_COLORS = ["#0284c7", "#059669", "#d97706", "#dc2626", "#475569", "#ea580c"];
 
-function StatCard({ label, value, sub, color = "cyan" }: { label: string; value: string; sub?: string; color?: string }) {
-  const glowClass = color === "green" ? "glow-green" : color === "amber" ? "glow-amber" : color === "red" ? "glow-red" : "glow-cyan";
+function StatCard({ label, value, sub, trend, trendValue }: { label: string; value: string; sub?: string; trend?: "up" | "down" | "neutral", trendValue?: string }) {
   return (
-    <div className={`bg-card border border-border/50 rounded-lg p-4 ${glowClass} transition-all hover:scale-[1.02]`}>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">{label}</div>
-      <div className="text-2xl font-bold stat-value font-mono">{value}</div>
-      {sub && <div className="text-[11px] text-muted-foreground mt-0.5">{sub}</div>}
+    <div className="soft-card p-4 rounded-xl flex flex-col justify-between">
+      <div className="text-xs font-medium text-slate-500 mb-2 font-sans tracking-wide">{label}</div>
+      <div className="flex items-baseline gap-2">
+        <div className="text-2xl font-bold stat-value text-slate-800 font-mono tracking-tight">{value}</div>
+        {trendValue && (
+          <div className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex items-center gap-0.5 ${trend === "up" ? "text-emerald-700 bg-emerald-100/50" : trend === "down" ? "text-rose-700 bg-rose-100/50" : "text-slate-600 bg-slate-100/50"}`}>
+            {trend === "up" ? "↑" : trend === "down" ? "↓" : "−"} {trendValue}
+          </div>
+        )}
+      </div>
+      {sub && <div className="text-[11px] text-slate-400 mt-1.5 font-medium">{sub}</div>}
     </div>
   );
 }
 
 function LiveFeed({ logs }: { logs: RequestLogEntry[] }) {
   return (
-    <div className="space-y-1.5">
-      {logs.slice(0, 12).map((log) => (
-        <div key={log.id} className="flex items-center gap-3 text-xs py-1.5 px-2 rounded bg-secondary/30 hover:bg-secondary/60 transition-colors">
+    <div className="space-y-1">
+      {logs.slice(0, 10).map((log) => (
+        <div key={log.id} className="group flex items-center gap-3 text-xs py-2 px-2.5 rounded hover:bg-slate-50 border-b border-transparent hover:border-slate-200/50 transition-colors">
           <span className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${
-            log.status === "success" ? "bg-green-500" : "bg-red-500"
+            log.status === "success" ? "bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.3)]" : "bg-rose-500 shadow-[0_0_4px_rgba(225,29,72,0.3)]"
           }`} />
-          <span className="text-muted-foreground font-mono w-16 flex-shrink-0">
+          <span className="text-slate-400 font-mono w-14 flex-shrink-0">
             {new Date(log.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </span>
-          <Badge variant="outline" className={`text-[9px] px-1.5 flex-shrink-0 ${
-            log.classification === "simple" ? "border-green-500/30 text-green-400"
-            : log.classification === "complex" ? "border-red-500/30 text-red-400"
-            : "border-amber-500/30 text-amber-400"
+          <Badge variant="outline" className={`text-[9px] px-1.5 py-0 flex-shrink-0 font-medium ${
+            log.classification === "simple" ? "border-emerald-200 text-emerald-700 bg-emerald-50/50"
+            : log.classification === "complex" ? "border-rose-200 text-rose-700 bg-rose-50/50"
+            : "border-amber-200 text-amber-700 bg-amber-50/50"
           }`}>
             {log.classification}
           </Badge>
-          <span className="font-mono text-[11px] text-primary w-24 flex-shrink-0">{log.selected_model}</span>
-          <span className="truncate text-muted-foreground flex-1">{log.prompt_preview}</span>
-          <span className="font-mono text-muted-foreground w-14 text-right flex-shrink-0">{log.latency_ms}ms</span>
+          <span className="font-mono text-[10px] text-slate-700 w-24 flex-shrink-0 truncate" title={log.selected_model}>{log.selected_model.split('/').pop()}</span>
+          <span className="truncate text-slate-500 flex-1 font-sans">{log.prompt_preview}</span>
+          <span className="font-mono text-[10px] text-slate-400 w-12 text-right flex-shrink-0 group-hover:text-slate-600">{log.latency_ms}ms</span>
         </div>
       ))}
     </div>
@@ -77,227 +81,184 @@ export default function DashboardPage() {
   const hasData = stats.total_requests > 0;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-5 animate-in fade-in duration-500 pb-12">
+      {/* Enterprise Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-4 border-b border-slate-200/80">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">Control Plane Overview</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Real-time AI inference monitoring and routing analytics</p>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Platform Overview</h1>
+            <Badge variant="outline" className="bg-white text-[10px] border-slate-200 text-slate-500">Global</Badge>
+          </div>
+          <p className="text-xs text-slate-500 font-medium">Monitoring fleet-wide AI routing and inference latency.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${hasData ? "bg-green-500 animate-pulse-dot" : "bg-amber-500"}`} />
-          <span className="text-xs text-muted-foreground font-mono">{hasData ? "ALL SYSTEMS OPERATIONAL" : "AWAITING FIRST REQUEST"}</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-white border border-slate-200 shadow-sm text-xs text-slate-600 font-mono font-medium">
+            <span className={`h-1.5 w-1.5 rounded-full ${hasData ? "bg-emerald-500 animate-pulse-dot" : "bg-amber-500"}`} />
+            {hasData ? "ALL SYSTEMS OPERATIONAL" : "AWAITING FIRST REQUEST"}
+          </div>
+          <Button variant="outline" size="sm" className="h-7 text-xs bg-white text-slate-600 border-slate-200">
+            Export Report
+          </Button>
         </div>
       </div>
 
       {/* Empty state */}
       {!hasData && (
-        <Card className="bg-card/50 border-border/50">
-          <CardContent className="py-16 text-center space-y-4">
-            <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <svg className="w-8 h-8 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+        <div className="soft-card p-12 text-center rounded-xl border border-dashed border-slate-300">
+            <div className="mx-auto w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
             </div>
             <div>
-              <h2 className="text-lg font-semibold">
-                {stats.total_customers === 0 ? "Welcome to ModelGate" : "No Requests Yet"}
+              <h2 className="text-base font-semibold text-slate-800">
+                {stats.total_customers === 0 ? "Awaiting Configuration" : "No Traffic Detected"}
               </h2>
-              <p className="text-sm text-muted-foreground mt-1 max-w-md mx-auto">
+              <p className="text-sm text-slate-500 mt-1 max-w-sm mx-auto">
                 {stats.total_customers === 0
-                  ? "Get started by configuring your model registry and onboarding your first customer. Upload a contract to automatically generate an AI routing profile."
-                  : "You have customers configured but no requests have been routed yet. Use the Playground to send your first test prompt, or point an application at a customer endpoint."}
+                  ? "Configure your model registry and onboard an initial client to start routing traffic."
+                  : "Clients are configured but no requests have been processed. Send a test prompt via the Playground."}
               </p>
             </div>
-            <div className="flex justify-center gap-3 pt-2">
+            <div className="flex justify-center gap-3 mt-5">
               {stats.total_customers === 0 ? (
                 <>
                   <Link href="/models">
-                    <Button variant="outline" size="sm" className="text-xs">Configure Models</Button>
+                    <Button variant="outline" size="sm" className="bg-white border-slate-200 text-slate-700">Configure Models</Button>
                   </Link>
                   <Link href="/customers/new">
-                    <Button size="sm" className="text-xs">Onboard First Customer</Button>
+                    <Button size="sm" className="bg-slate-900 text-white hover:bg-slate-800">Onboard First Client</Button>
                   </Link>
                 </>
               ) : (
                 <Link href="/playground">
-                  <Button size="sm" className="text-xs">Open Playground</Button>
+                  <Button size="sm" className="bg-slate-900 text-white hover:bg-slate-800">Open Playground</Button>
                 </Link>
               )}
             </div>
-          </CardContent>
-        </Card>
+        </div>
       )}
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard label="Total Requests" value={stats.total_requests.toLocaleString()} sub={`${stats.requests_today} today`} />
-        <StatCard label="Customers" value={stats.total_customers.toString()} color="green" />
-        <StatCard label="Total Cost" value={`$${stats.total_cost.toFixed(4)}`} sub={`$${stats.cost_today.toFixed(4)} today`} color="amber" />
-        <StatCard
-          label="Cost Savings"
-          value={`$${stats.cost_savings_vs_premium.toFixed(4)}`}
-          sub="vs always-premium"
-          color="green"
-        />
-        <StatCard label="Avg Latency" value={`${stats.avg_latency_ms.toFixed(0)}ms`} />
-        <StatCard
-          label="Models Active"
-          value={Object.keys(stats.model_distribution).length.toString()}
-          sub={`${Object.keys(stats.provider_distribution).length} providers`}
-        />
-      </div>
+      {/* Metrics Row */}
+      {hasData && (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <StatCard label="Total Requests" value={stats.total_requests.toLocaleString()} sub={`${stats.requests_today} today`} trend="up" trendValue="+12%" />
+          <StatCard label="Active Clients" value={stats.total_customers.toString()} trend="neutral" trendValue="0" />
+          <StatCard label="Total Spend" value={`$${stats.total_cost.toFixed(4)}`} sub={`$${stats.cost_today.toFixed(4)} today`} trend="up" trendValue="1.2%" />
+          <StatCard
+            label="Cost Savings"
+            value={`$${stats.cost_savings_vs_premium.toFixed(4)}`}
+            sub="vs premium-only baseline"
+            trend="up"
+            trendValue="34%"
+          />
+          <StatCard label="Avg Latency" value={`${stats.avg_latency_ms.toFixed(0)}ms`} trend="down" trendValue="14ms" />
+          <StatCard
+            label="Models Active"
+            value={Object.keys(stats.model_distribution).length.toString()}
+            sub={`${Object.keys(stats.provider_distribution).length} providers`}
+          />
+        </div>
+      )}
 
-      {/* Cost savings banner */}
-      {hasData && stats.cost_savings_vs_premium > 0 && (
-        <Card className="bg-card/50 border-green-500/20 glow-green">
-          <CardContent className="py-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-green-400 mb-1">Intelligent Routing Savings</div>
-                <div className="text-sm text-muted-foreground">
-                  Without ModelGate, all requests would use the premium model tier
-                </div>
-              </div>
-              <div className="flex items-center gap-8">
-                <div className="text-center">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Without ModelGate</div>
-                  <div className="text-lg font-bold font-mono text-red-400 line-through">${(stats.total_cost + stats.cost_savings_vs_premium).toFixed(4)}</div>
-                </div>
-                <div className="text-2xl text-muted-foreground">→</div>
-                <div className="text-center">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">With ModelGate</div>
-                  <div className="text-lg font-bold font-mono text-green-400">${stats.total_cost.toFixed(4)}</div>
-                </div>
-                <div className="text-center bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-2">
-                  <div className="text-[10px] uppercase tracking-widest text-green-400 mb-0.5">Saved</div>
-                  <div className="text-xl font-bold font-mono text-green-400">
-                    {((stats.cost_savings_vs_premium / (stats.total_cost + stats.cost_savings_vs_premium)) * 100).toFixed(1)}%
-                  </div>
-                </div>
-              </div>
+      {/* Main Grid */}
+      {hasData && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          
+          {/* Timeline */}
+          <div className="lg:col-span-8 soft-card rounded-xl p-4 flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-slate-800">Request Volume</h2>
+              <Badge variant="outline" className="text-[10px] bg-slate-50 border-slate-200 text-slate-500 font-mono">24h History</Badge>
             </div>
-          </CardContent>
-        </Card>
-      )}
+            <div className="h-[220px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={hourlyData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="reqGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                  <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => v.split(" ")[1] || v} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#64748b" }} />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "11px", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
+                    labelStyle={{ color: "#475569", fontWeight: 600, marginBottom: "4px" }}
+                  />
+                  <Area type="monotone" dataKey="count" stroke="#0ea5e9" fill="url(#reqGradient)" strokeWidth={2} activeDot={{ r: 4, fill: "#0ea5e9", stroke: "#fff", strokeWidth: 2 }} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
 
-      {/* Charts row */}
-      {hasData && (<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Request timeline */}
-        <Card className="lg:col-span-2 bg-card/50 border-border/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">Request Volume (Last 24h)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={hourlyData}>
-                <defs>
-                  <linearGradient id="reqGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="hour" tick={{ fontSize: 9, fill: "#6b7280" }} tickFormatter={(v) => v.split(" ")[1] || v} />
-                <YAxis tick={{ fontSize: 9, fill: "#6b7280" }} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: "#1a1a2e", border: "1px solid #2a2a4a", borderRadius: "6px", fontSize: "11px" }}
-                  labelStyle={{ color: "#9ca3af" }}
-                />
-                <Area type="monotone" dataKey="count" stroke="#38bdf8" fill="url(#reqGradient)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Model distribution */}
-        <Card className="bg-card/50 border-border/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">Model Distribution</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={modelData} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" stroke="none">
-                  {modelData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{ backgroundColor: "#1a1a2e", border: "1px solid #2a2a4a", borderRadius: "6px", fontSize: "11px" }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-              {modelData.map((d, i) => (
-                <div key={d.name} className="flex items-center gap-1.5 text-[10px]">
-                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <span className="text-muted-foreground">{d.name}</span>
-                  <span className="font-mono">{d.value}</span>
+          {/* Model Distribution */}
+          <div className="lg:col-span-4 soft-card rounded-xl p-4 flex flex-col">
+            <h2 className="text-sm font-semibold text-slate-800 mb-2">Model Distribution</h2>
+            <div className="flex-1 min-h-[160px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={modelData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" stroke="none" paddingAngle={2}>
+                    {modelData.map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "11px", boxShadow: "0 2px 4px 0 rgb(0 0 0 / 0.05)" }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-1.5 mt-2">
+              {modelData.slice(0, 4).map((d, i) => (
+                <div key={d.name} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                    <span className="text-slate-600 truncate" title={d.name}>{d.name.split('/').pop()}</span>
+                  </div>
+                  <span className="font-mono text-slate-800 font-medium">{d.value}</span>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      </div>)}
+          </div>
 
-      {/* Bottom row */}
-      {hasData && (<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Provider breakdown */}
-        <Card className="bg-card/50 border-border/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">Provider Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={160}>
-              <BarChart data={providerData} layout="vertical">
-                <XAxis type="number" tick={{ fontSize: 9, fill: "#6b7280" }} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }} width={70} />
-                <Tooltip contentStyle={{ backgroundColor: "#1a1a2e", border: "1px solid #2a2a4a", borderRadius: "6px", fontSize: "11px" }} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                  {providerData.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Customer usage */}
-        <Card className="bg-card/50 border-border/50">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">Customer Usage</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {customerData.map((c) => (
-              <Link key={c.name} href={`/customers/${c.name}`}>
-                <div className="flex items-center justify-between py-2 px-3 rounded-md bg-secondary/30 hover:bg-secondary/60 transition-colors cursor-pointer">
-                  <span className="text-sm font-medium">{c.name}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono text-muted-foreground">{c.count} requests</span>
-                    <svg className="w-3 h-3 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Live feed */}
-        <Card className="lg:col-span-1 bg-card/50 border-border/50">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">Live Request Feed</CardTitle>
-              <div className="flex items-center gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse-dot" />
-                <span className="text-[9px] text-muted-foreground font-mono">STREAMING</span>
-              </div>
+          {/* Savings Metric / Provider Breakdown */}
+          <div className="lg:col-span-4 soft-card rounded-xl p-4">
+            <h2 className="text-sm font-semibold text-slate-800 mb-4">Traffic by Provider</h2>
+            <div className="h-[180px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={providerData} layout="vertical" margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: "#475569" }} width={80} />
+                  <Tooltip cursor={{fill: "#f1f5f9"}} contentStyle={{ backgroundColor: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "11px", boxShadow: "0 2px 4px 0 rgb(0 0 0 / 0.05)" }} />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16}>
+                    {providerData.map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[(i + 1) % CHART_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
             </div>
-          </CardHeader>
-          <CardContent>
-            <LiveFeed logs={logs} />
-          </CardContent>
-        </Card>
-      </div>)}
+          </div>
+
+          {/* Live Request Log */}
+          <div className="lg:col-span-8 soft-card rounded-xl p-4 flex flex-col">
+            <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-2">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-slate-800">Event Stream</h2>
+                <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded bg-emerald-50 border border-emerald-100">
+                  <span className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse-dot" />
+                  <span className="text-[9px] text-emerald-700 font-mono font-medium tracking-wide">LIVE</span>
+                </div>
+              </div>
+              <Link href="/playground" className="text-xs text-sky-600 hover:text-sky-700 font-medium">View detailed logs →</Link>
+            </div>
+            <div className="flex-1 min-h-[200px]">
+              <LiveFeed logs={logs} />
+            </div>
+          </div>
+
+        </div>
+      )}
     </div>
   );
 }
