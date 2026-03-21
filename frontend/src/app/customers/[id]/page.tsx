@@ -549,16 +549,29 @@ export default function CustomerProfilePage() {
 
       {/* Warnings */}
       {profile.warnings.length > 0 && (
-        <Card className="bg-amber-500/5 border-amber-500/20">
-          <CardHeader className="pb-2"><CardTitle className="text-xs uppercase tracking-widest text-amber-400">Contract Warnings</CardTitle></CardHeader>
-          <CardContent>
-            <ul className="space-y-1.5">
-              {profile.warnings.map((w, i) => (
-                <li key={i} className="text-xs text-amber-300/80 flex items-start gap-2">
-                  <span className="text-amber-500 mt-0.5">&#9651;</span>{w}
-                </li>
-              ))}
-            </ul>
+        <Card className="bg-card/50 border-border/50">
+          <CardHeader className="pb-2"><CardTitle className="text-xs uppercase tracking-widest text-muted-foreground">Diagnostics</CardTitle></CardHeader>
+          <CardContent className="space-y-1.5">
+            {profile.warnings.map((w, i) => {
+              const isObj = typeof w === "object" && w !== null;
+              const severity = isObj ? w.severity : "warning";
+              const type = isObj ? w.type : "";
+              const message = isObj ? w.message : String(w);
+              const colors = { critical: "border-red-500/30 bg-red-500/5 text-red-400", warning: "border-amber-500/30 bg-amber-500/5 text-amber-400", info: "border-blue-500/30 bg-blue-500/5 text-blue-400" };
+              const typeLabels: Record<string, string> = { provider_gap: "PROVIDER", model_gap: "MODEL", region_gap: "REGION", missing_field: "MISSING", contract_ambiguity: "AMBIGUITY" };
+              return (
+                <div key={i} className={`border rounded-lg px-3 py-2 flex items-start gap-2 ${colors[severity] || colors.warning}`}>
+                  <span className="mt-0.5 text-xs">&#9651;</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Badge variant="outline" className="text-[7px] px-1 py-0 border-current/30">{severity.toUpperCase()}</Badge>
+                      {type && <span className="text-[8px] font-mono text-muted-foreground/50">{typeLabels[type] || type}</span>}
+                    </div>
+                    <p className="text-[10px] text-foreground/70">{message}</p>
+                  </div>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}

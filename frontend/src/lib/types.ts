@@ -10,6 +10,12 @@ export interface CustomerPerformance {
   cost_sensitivity: string;
 }
 
+export interface ProfileWarning {
+  type: "provider_gap" | "model_gap" | "region_gap" | "missing_field" | "contract_ambiguity";
+  severity: "critical" | "warning" | "info";
+  message: string;
+}
+
 export interface CustomerProfile {
   customer_id: string;
   customer_name: string;
@@ -18,7 +24,7 @@ export interface CustomerProfile {
   constraints: CustomerConstraints;
   performance: CustomerPerformance;
   routing_preferences: Record<string, string[]>;
-  warnings: string[];
+  warnings: (string | ProfileWarning)[];
   created_at: string;
 }
 

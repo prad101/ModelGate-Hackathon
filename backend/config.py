@@ -7,7 +7,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-EXTRACTION_MODEL = "anthropic/claude-sonnet-4"
+EXTRACTION_MODEL = "openai/gpt-5.4"
 CLASSIFIER_MODEL_NAME = "katanemo/Arch-Router-1.5B"
 
 DB_PATH = Path(__file__).parent / "data" / "controlplane.db"

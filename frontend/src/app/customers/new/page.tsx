@@ -225,14 +225,55 @@ function ProfileResult({
 
         {/* ── warnings ── */}
         {profile.warnings.length > 0 && (
-          <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
-            <div className="text-[10px] uppercase tracking-widest text-amber-400 mb-1.5 font-medium">Warnings</div>
-            {profile.warnings.map((w, i) => (
-              <div key={i} className="text-[10px] text-amber-300/70 flex items-start gap-1.5 py-0.5">
-                <span className="text-amber-500 mt-px">&#9651;</span>
-                <span>{w}</span>
-              </div>
-            ))}
+          <div className="space-y-1.5">
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">Diagnostics</div>
+            {profile.warnings.map((w, i) => {
+              const isStructured = typeof w === "object" && w !== null;
+              const severity = isStructured ? w.severity : "warning";
+              const type = isStructured ? w.type : "contract_ambiguity";
+              const message = isStructured ? w.message : String(w);
+
+              const severityStyles = {
+                critical: "border-red-500/30 bg-red-500/5",
+                warning: "border-amber-500/30 bg-amber-500/5",
+                info: "border-blue-500/30 bg-blue-500/5",
+              };
+              const severityIcon = {
+                critical: "text-red-400",
+                warning: "text-amber-400",
+                info: "text-blue-400",
+              };
+              const typeLabels: Record<string, string> = {
+                provider_gap: "PROVIDER",
+                model_gap: "MODEL",
+                region_gap: "REGION",
+                missing_field: "MISSING",
+                contract_ambiguity: "AMBIGUITY",
+              };
+
+              return (
+                <div key={i} className={`border rounded-lg px-3 py-2 flex items-start gap-2.5 ${severityStyles[severity] || severityStyles.warning}`}>
+                  <svg className={`w-3.5 h-3.5 mt-0.5 flex-shrink-0 ${severityIcon[severity] || severityIcon.warning}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    {severity === "critical" ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    ) : severity === "info" ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                    ) : (
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                    )}
+                  </svg>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <Badge variant="outline" className={`text-[7px] px-1 py-0 ${severityIcon[severity] || ""} border-current/30`}>
+                        {severity.toUpperCase()}
+                      </Badge>
+                      <span className="text-[8px] font-mono text-muted-foreground/50">{typeLabels[type] || type}</span>
+                    </div>
+                    <p className="text-[10px] text-foreground/70">{message}</p>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
 

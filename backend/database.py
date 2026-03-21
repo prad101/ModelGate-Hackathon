@@ -208,14 +208,18 @@ def get_customer_stats(customer_id: str) -> dict:
     ttfts = [r.get("ttft_ms") or 0 for r in rows if (r.get("ttft_ms") or 0) > 0]
     successes = sum(1 for r in rows if (r.get("status") or "success") == "success")
 
-    # Cost if everything went to the most expensive model
-    from backend.services.provider_registry import get_active_catalog
+    # Cost if everything went to the most expensive enabled model (the "no routing" baseline)
+    from backend.services.provider_registry import get_active_catalog, estimate_cost
     catalog = get_active_catalog()
-    premium_cost_input = max(m["cost_per_m_input"] for m in catalog.values())
-    premium_cost_output = max(m["cost_per_m_output"] for m in catalog.values())
+    # Find the most expensive model by combined input+output cost
+    premium_model = max(
+        catalog.items(),
+        key=lambda x: x[1].get("cost_per_m_input", 0) + x[1].get("cost_per_m_output", 0),
+    )
+    premium_info = premium_model[1]
     premium_total = sum(
-        ((r.get("input_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_cost_input +
-        ((r.get("output_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_cost_output
+        ((r.get("input_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_info.get("cost_per_m_input", 0) +
+        ((r.get("output_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_info.get("cost_per_m_output", 0)
         for r in rows
     )
 
@@ -306,11 +310,14 @@ def get_global_stats() -> dict:
 
     from backend.services.provider_registry import get_active_catalog
     catalog = get_active_catalog()
-    premium_cost_input = max(m["cost_per_m_input"] for m in catalog.values())
-    premium_cost_output = max(m["cost_per_m_output"] for m in catalog.values())
+    premium_model = max(
+        catalog.items(),
+        key=lambda x: x[1].get("cost_per_m_input", 0) + x[1].get("cost_per_m_output", 0),
+    )
+    premium_info = premium_model[1]
     premium_total = sum(
-        ((r.get("input_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_cost_input +
-        ((r.get("output_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_cost_output
+        ((r.get("input_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_info.get("cost_per_m_input", 0) +
+        ((r.get("output_tokens") or r["tokens_used"] // 2) / 1_000_000) * premium_info.get("cost_per_m_output", 0)
         for r in rows
     )
 

@@ -23,7 +23,7 @@ class CustomerProfile(BaseModel):
     constraints: CustomerConstraints
     performance: CustomerPerformance
     routing_preferences: dict[str, list[str]]  # {"simple": [...], "medium": [...], "complex": [...]}
-    warnings: list[str] = []
+    warnings: list = []  # list of str or {"type", "severity", "message"} dicts
     created_at: str = ""
 
     def model_post_init(self, __context):
