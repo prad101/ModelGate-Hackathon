@@ -1,11 +1,11 @@
 import json
 import re
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 _model = None
-_tokenizer = None
 _model_loaded = False
 
 ROUTE_POLICIES = [
@@ -25,29 +25,34 @@ ROUTE_POLICIES = [
 
 
 def load_classifier():
-    global _model, _tokenizer, _model_loaded
+    global _model, _model_loaded
     try:
-        import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from llama_cpp import Llama
+        from backend.config import CLASSIFIER_GGUF_PATH, CLASSIFIER_N_CTX, CLASSIFIER_N_GPU_LAYERS
 
-        model_name = "katanemo/Arch-Router-1.5B"
-        logger.info(f"Loading classification model: {model_name}")
+        if not Path(CLASSIFIER_GGUF_PATH).exists():
+            logger.warning(f"GGUF model not found at {CLASSIFIER_GGUF_PATH}")
+            logger.warning("Falling back to heuristic classifier")
+            _model_loaded = False
+            return
 
-        _tokenizer = AutoTokenizer.from_pretrained(model_name)
-        _model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            dtype=torch.float16,
-            device_map="cuda",
+        logger.info(f"Loading GGUF classification model: {CLASSIFIER_GGUF_PATH}")
+        _model = Llama(
+            model_path=CLASSIFIER_GGUF_PATH,
+            n_ctx=CLASSIFIER_N_CTX,
+            n_gpu_layers=CLASSIFIER_N_GPU_LAYERS,
+            verbose=False,
         )
-        _model.eval()
         _model_loaded = True
-        logger.info("Classification model loaded on GPU — running warmup...")
+        logger.info(f"GGUF model loaded (n_gpu_layers={CLASSIFIER_N_GPU_LAYERS}) — running warmup...")
 
-        # Warmup: run one inference to JIT-compile CUDA kernels
+        # Warmup: one inference to initialize CUDA context
         warmup_prompt = _build_arch_prompt("Hello, what is your return policy?")
-        inputs = _tokenizer(warmup_prompt, return_tensors="pt").to(_model.device)
-        with torch.no_grad():
-            _model.generate(**inputs, max_new_tokens=20)
+        _model.create_chat_completion(
+            messages=[{"role": "user", "content": warmup_prompt}],
+            max_tokens=10,
+            temperature=0,
+        )
         logger.info("Classification model warmed up and ready")
     except Exception as e:
         logger.warning(f"Failed to load classification model: {e}")
@@ -75,22 +80,15 @@ def classify_prompt(prompt: str) -> str:
 
 
 def _arch_router_classify(prompt: str) -> str:
-    import torch
-
     arch_prompt = _build_arch_prompt(prompt)
-    inputs = _tokenizer(arch_prompt, return_tensors="pt").to(_model.device)
 
-    with torch.inference_mode():
-        outputs = _model.generate(
-            **inputs,
-            max_new_tokens=30,
-            temperature=0.0,
-            do_sample=False,
-            pad_token_id=_tokenizer.eos_token_id,
-        )
+    output = _model.create_chat_completion(
+        messages=[{"role": "user", "content": arch_prompt}],
+        max_tokens=30,
+        temperature=0,
+    )
 
-    new_tokens = outputs[0][inputs["input_ids"].shape[1]:]
-    response = _tokenizer.decode(new_tokens, skip_special_tokens=True).strip()
+    response = output["choices"][0]["message"]["content"].strip()
 
     try:
         parsed = json.loads(response)

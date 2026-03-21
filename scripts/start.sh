@@ -52,6 +52,15 @@ if [ ! -f "$PROJECT_DIR/backend/data/controlplane.db" ]; then
     echo -e "${GREEN}[setup]${RESET} Demo data seeded"
 fi
 
+# CUDA libs for llama-cpp-python (GGUF classifier)
+NVIDIA_SITE="$(python3 -c 'import site; print(site.getusersitepackages())')/nvidia"
+if [ -d "$NVIDIA_SITE" ]; then
+    for lib_dir in "$NVIDIA_SITE"/*/lib; do
+        export LD_LIBRARY_PATH="${lib_dir}:${LD_LIBRARY_PATH}"
+    done
+    echo -e "${GREEN}[setup]${RESET} CUDA libraries found for llama.cpp"
+fi
+
 # ── Build frontend for production ──────────────────────────
 
 echo -e "${YELLOW}[frontend]${RESET} Building for production..."
