@@ -10,8 +10,8 @@ from pathlib import Path
 from llama_cpp import Llama
 
 EVAL_PATH = Path(__file__).parent / "grpo_eval_data.json"
-STOCK_GGUF = Path(__file__).parent / "stock_arch_router_gguf"
-NOCOT_GGUF = Path(__file__).parent / "nocot_arch_router_gguf"
+STOCK_GGUF = Path(__file__).parent / "stock_arch_router.Q8_0.gguf"
+NOCOT_GGUF = Path(__file__).parent / "nocot_arch_router.Q8_0.gguf"
 
 ROUTE_POLICIES = [
     {"name": "simple", "description": "Simple factual questions, greetings, basic lookups, yes/no answers, FAQ-style queries, single-step tasks, status checks, straightforward requests"},
@@ -143,10 +143,9 @@ def main():
     print(f"Loaded {len(data)} eval prompts\n")
 
     # ── Stock GGUF ──
-    stock_gguf_path = find_gguf(STOCK_GGUF)
-    print(f"Loading stock GGUF: {stock_gguf_path.name}")
+    print(f"Loading stock GGUF: {STOCK_GGUF.name}")
     stock_model = Llama(
-        model_path=str(stock_gguf_path),
+        model_path=str(STOCK_GGUF),
         n_ctx=512,
         n_gpu_layers=-1,  # All layers on GPU
         verbose=False,
@@ -160,10 +159,9 @@ def main():
     del stock_model
 
     # ── No-CoT GGUF ──
-    nocot_gguf_path = find_gguf(NOCOT_GGUF)
-    print(f"Loading no-CoT GGUF: {nocot_gguf_path.name}")
+    print(f"Loading no-CoT GGUF: {NOCOT_GGUF.name}")
     nocot_model = Llama(
-        model_path=str(nocot_gguf_path),
+        model_path=str(NOCOT_GGUF),
         n_ctx=512,
         n_gpu_layers=-1,
         verbose=False,

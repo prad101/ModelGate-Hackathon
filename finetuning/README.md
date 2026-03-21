@@ -1,36 +1,109 @@
 # ModelGate Arch-Router Fine-Tuning
 
-GRPO (Group Relative Policy Optimization) fine-tuning of the Arch-Router-1.5B model for ModelGate's contract-aware query routing.
+GRPO (Group Relative Policy Optimization) fine-tuning of Arch-Router-1.5B for ModelGate's contract-aware query routing. Classifies incoming queries as **simple**, **medium**, or **complex** to route them to the right model tier.
+
+## Results
+
+### Accuracy — Held-Out Eval (54 unseen prompts, zero training overlap)
+
+| Tier | Stock Arch-Router | Our Fine-Tune | Improvement |
+|------|-------------------|---------------|-------------|
+| Simple (33) | 87.9% | 81.8% | -6.1% |
+| **Medium (14)** | **14.3%** | **85.7%** | **+71.4%** |
+| Complex (7) | 100.0% | 85.7% | -14.3% |
+| **Overall (54)** | **70.4%** | **83.3%** | **+13.0%** |
+
+The stock model misclassifies **86% of medium queries** as complex — routing them to expensive premium models when a mid-tier model would suffice. Our fine-tune fixes this.
+
+### Latency — GGUF Q8_0 + CUDA (RTX 3080 Laptop)
+
+| Metric | Stock | Our Fine-Tune | Delta |
+|--------|-------|---------------|-------|
+| Avg | 62.6ms | 61.7ms | -0.9ms |
+| P50 | 61.3ms | 60.5ms | -0.8ms |
+| P95 | 67.8ms | 67.3ms | -0.5ms |
+
+**Zero latency overhead.** The fine-tune is actually marginally faster.
+
+### Latency by Inference Backend
+
+| Backend | Model Size | Avg Latency | vs Transformers FP16 |
+|---------|-----------|-------------|---------------------|
+| Transformers FP16 | ~3.0 GB | 196ms | baseline |
+| GGUF Q8_0 (CPU) | 1.6 GB | 768ms | 3.9x slower |
+| **GGUF Q8_0 (CUDA)** | **1.6 GB** | **62ms** | **3.2x faster** |
+
+### Quantization Impact on Accuracy
+
+| Backend | Stock Accuracy | Fine-Tune Accuracy |
+|---------|---------------|-------------------|
+| Transformers FP16 | 72.2% | 81.5% |
+| GGUF Q8_0 | 70.4% | 83.3% |
+
+Q8_0 quantization causes **no meaningful accuracy degradation**.
+
+### Chain-of-Thought vs Direct Output
+
+We trained two variants — one with chain-of-thought reasoning (`<reasoning>` tags before the answer) and one with direct JSON output. Results on held-out data:
+
+| Variant | Accuracy | Avg Latency | Verdict |
+|---------|----------|-------------|---------|
+| Stock | 72.2% | 196ms | Baseline |
+| **No-CoT Fine-Tune** | **81.5%** | **198ms** | **Best tradeoff** |
+| CoT Fine-Tune | 61.1% | 1,787ms | Overfit, 9x slower |
+
+The CoT variant actually hurt accuracy on unseen data (overfit to training format) and added ~1.6s of latency per classification. The No-CoT variant is the clear winner.
 
 ## Why Fine-Tune?
 
-The stock `katanemo/Arch-Router-1.5B` model was trained for general-purpose intent routing. Our use case is specific: classify incoming queries as **simple**, **medium**, or **complex** across customer support, insurance claims, and device protection domains. The heuristic fallback classifier achieves ~85% accuracy but struggles with medium-tier insurance/claims queries that contain domain-specific terms.
-
-GRPO teaches the model to **reason about query complexity** before classifying, which improves accuracy on ambiguous cases without requiring manually labeled preference data.
+The stock `katanemo/Arch-Router-1.5B` was trained for general-purpose intent routing. Our use case is specific: classify queries across customer support, insurance claims, and device protection into three complexity tiers. The stock model has a critical blind spot — it routes nearly all medium-complexity queries to the complex tier, wasting money on premium models.
 
 ## Architecture
 
 ```
-Base model:  Qwen/Qwen2.5-1.5B-Instruct
+Qwen/Qwen2.5-1.5B-Instruct           (base LLM, 1.5B params)
      |
-     v  (Katanemo fine-tune for intent routing)
-Arch-Router-1.5B  (katanemo/Arch-Router-1.5B)
+     v  Katanemo fine-tune
+katanemo/Arch-Router-1.5B             (general intent routing)
      |
-     v  (Our GRPO fine-tune for ModelGate complexity routing)
-ModelGate-Router   <-- this is what we're training
+     v  Our GRPO fine-tune (2.3% of params, LoRA rank 32)
+ModelGate-Router                       (domain-specific complexity routing)
+     |
+     v  GGUF Q8_0 quantization
+nocot_arch_router.Q8_0.gguf           (1.6 GB, production-ready)
 ```
 
 ## Files
 
+### Model Weights
+
+| File | Size | Description |
+|------|------|-------------|
+| `nocot_arch_router.Q8_0.gguf` | 1.6 GB | Production model — GGUF Q8_0, deploy with llama.cpp |
+| `stock_arch_router.Q8_0.gguf` | 1.6 GB | Stock model in GGUF Q8_0, for comparison |
+| `modelgate_arch_router_nocot_lora/` | 157 MB | No-CoT LoRA adapter (best model) |
+| `modelgate_arch_router_lora/` | 157 MB | CoT LoRA adapter (for reference only) |
+
+### Data
+
 | File | Description |
 |------|-------------|
-| `grpo_finetune_arch_router.ipynb` | Main training notebook — run this on Colab (T4 GPU) |
-| `grpo_training_data.json` | 172 labeled prompts across 4 domains |
-| `Qwen2.5_3B_GRPO.ipynb` | Original Unsloth reference notebook (unmodified, for reference) |
+| `grpo_training_data.json` | 172 labeled training prompts across 4 domains |
+| `grpo_eval_data.json` | 54 held-out eval prompts (zero overlap with training) |
+
+### Scripts
+
+| File | Description |
+|------|-------------|
+| `grpo_finetune_arch_router.ipynb` | CoT training notebook (Colab/local) |
+| `grpo_run_nocot.py` | No-CoT training script (the one that produced the best model) |
+| `export_gguf.py` | Merges LoRA + converts to GGUF Q8_0 |
+| `bench_gguf.py` | Benchmarks GGUF models via llama.cpp (accuracy + latency) |
+| `bench_stock_vs_finetune.py` | Benchmarks via Transformers (FP16, 3-way comparison) |
 
 ## Training Data
 
-**172 examples** across 4 domains and 3 complexity tiers:
+**172 training examples** across 4 domains and 3 tiers:
 
 | Domain | Count |
 |--------|-------|
@@ -39,145 +112,115 @@ ModelGate-Router   <-- this is what we're training
 | device_protection | 37 |
 | general | 38 |
 
-| Tier | Count | Description |
-|------|-------|-------------|
-| simple | 95 | FAQs, status checks, greetings, yes/no questions |
-| medium | 51 | Multi-step troubleshooting, comparisons, summaries |
-| complex | 26 | Multi-document analysis, legal/financial reasoning, comprehensive evaluations |
+| Tier | Count | Examples |
+|------|-------|----------|
+| simple | 95 | "What is your return policy?", "Is my claim approved?" |
+| medium | 51 | "Compare the protection plans available for my new laptop..." |
+| complex | 26 | "Analyze the multi-party liability exposure across claims..." |
 
-Data format (`grpo_training_data.json`):
-```json
-{
-  "prompt": "What is your return policy?",
-  "expected_route": "simple",
-  "domain": "customer_support"
-}
-```
+**54 eval examples** — completely separate prompts, same domain/tier distribution, zero overlap with training data.
 
 ## How GRPO Training Works
 
-Unlike supervised fine-tuning (SFT) where you provide input-output pairs, GRPO:
+Unlike supervised fine-tuning where you provide input-output pairs, GRPO:
 
-1. **Generates** 8 candidate completions per prompt using the current model
-2. **Scores** each completion with reward functions
-3. **Reinforces** completions that scored highest relative to the group
+1. **Generates** multiple candidate completions per prompt
+2. **Scores** each with reward functions
+3. **Reinforces** the best completions relative to the group
 
-This teaches the model to discover effective reasoning patterns on its own.
+### No-CoT Reward Functions
 
-### Reward Functions
+| Function | Max Score | Purpose |
+|----------|-----------|---------|
+| `correctness_reward_func` | 2.0 | Route matches ground truth |
+| `valid_route_reward_func` | 0.5 | Output is a valid tier name |
+| `json_format_reward_func` | 1.0 | Output is clean JSON with "route" key |
+| `brevity_reward_func` | 0.5 | Rewards short outputs (just the JSON) |
 
-| Function | Max Score | What It Rewards |
-|----------|-----------|-----------------|
-| `correctness_reward_func` | 2.0 | Predicted route matches ground truth |
-| `valid_route_reward_func` | 0.5 | Output contains a valid route name |
-| `json_format_reward_func` | 0.5 | Answer section is valid JSON with "route" key |
-| `strict_format_reward_func` | 0.5 | Exact `<reasoning>\n...\n</reasoning>\n<answer>\n...\n</answer>` |
-| `soft_format_reward_func` | 0.5 | Loosely matches reasoning + answer format |
-| `xmlcount_reward_func` | ~0.5 | Counts individual XML tag presence |
+## Training Details
 
-Total possible reward per generation: **~4.5**
+| Parameter | Value |
+|-----------|-------|
+| Base model | `katanemo/Arch-Router-1.5B` |
+| Method | GRPO via Unsloth + TRL |
+| LoRA rank | 32 |
+| Trainable params | 36.9M / 1.58B (2.3%) |
+| Training steps | 150 |
+| Training time | **2.5 minutes** |
+| Hardware | RTX 3080 Laptop 8GB |
+| VRAM usage | ~6 GB (4-bit quantized during training) |
+| Generations per prompt | 4 |
+| Learning rate | 5e-6 |
+| Max completion length | 64 tokens |
 
-### Output Format
+## How to Reproduce
 
-The model learns to produce:
-```xml
-<reasoning>
-This is a simple factual question asking about return policy.
-It's a basic FAQ-style query requiring a single lookup, no
-multi-step reasoning or complex analysis needed.
-</reasoning>
-<answer>
-{"route": "simple"}
-</answer>
-```
+### Train the No-CoT Model
 
-## How to Run
-
-### Prerequisites
-
-- Google Colab account (free tier works — needs T4 GPU)
-- Or any machine with a GPU (7GB+ VRAM)
-
-### Steps
-
-1. Open `grpo_finetune_arch_router.ipynb` in Google Colab
-2. Upload `grpo_training_data.json` to the Colab environment
-3. Set runtime to **GPU** (T4 is fine)
-4. **Run All**
-5. Training takes ~30-60 minutes for 250 steps
-6. Expect 0 reward for first ~100 steps — this is normal
-7. Reward should start climbing around step 100-150
-8. After training, run the test cell (Section 7) to verify accuracy
-9. Save the LoRA adapter or merged model (Section 8)
-
-### Key Training Parameters
-
-```python
-model_name = "katanemo/Arch-Router-1.5B"  # 1.5B params, Qwen2.5 architecture
-load_in_4bit = True                        # ~7GB VRAM
-lora_rank = 64                             # LoRA rank
-max_seq_length = 1024                      # Max context length
-max_steps = 250                            # Training steps (increase for better results)
-num_generations = 8                        # GRPO samples per prompt
-learning_rate = 5e-6                       # Conservative LR
-max_prompt_length = 512                    # Our routing prompts are ~300-400 tokens
-max_completion_length = 256                # Reasoning + JSON answer
-```
-
-## Integration with ModelGate Backend
-
-After training, to deploy the fine-tuned model:
-
-1. **Save the merged 16-bit model** (Section 8 of the notebook)
-
-2. **Update `backend/services/classifier.py`**:
-   - Point `model_name` to your saved model path
-   - Update `_build_arch_prompt()` to include the `<reasoning>/<answer>` format instructions
-   - Update `_arch_router_classify()` to parse `<answer>` tags:
-
-```python
-# In _arch_router_classify(), after decoding the response:
-if "<answer>" in response:
-    answer_text = response.split("<answer>")[-1].split("</answer>")[0].strip()
-    try:
-        parsed = json.loads(answer_text)
-        route = parsed.get("route", "medium")
-        if route in ("simple", "medium", "complex"):
-            return route
-    except json.JSONDecodeError:
-        pass
-```
-
-3. **Benchmark** before and after:
 ```bash
-python scripts/bench_router.py classify
+# Requires: pip install unsloth vllm trl
+python finetuning/grpo_run_nocot.py
+# Output: modelgate_arch_router_nocot_lora/
 ```
+
+### Export to GGUF
+
+```bash
+python finetuning/export_gguf.py nocot
+# Output: finetuning/nocot_arch_router.Q8_0.gguf
+```
+
+### Benchmark
+
+```bash
+# GGUF benchmark (requires llama-cpp-python with CUDA)
+python finetuning/bench_gguf.py
+
+# Transformers FP16 benchmark (3-way: stock vs no-CoT vs CoT)
+python finetuning/bench_stock_vs_finetune.py
+```
+
+## Production Deployment
+
+The recommended deployment uses `nocot_arch_router.Q8_0.gguf` with llama.cpp:
+
+```python
+from llama_cpp import Llama
+
+model = Llama(
+    model_path="finetuning/nocot_arch_router.Q8_0.gguf",
+    n_ctx=512,
+    n_gpu_layers=-1,  # All layers on GPU
+)
+
+# Classify a query
+response = model.create_chat_completion(
+    messages=[{"role": "user", "content": routing_prompt}],
+    max_tokens=30,
+    temperature=0,
+)
+route = json.loads(response["choices"][0]["message"]["content"])["route"]
+# route is "simple", "medium", or "complex"
+```
+
+**Expected performance**: ~62ms per classification, 83%+ accuracy, 1.6 GB VRAM.
 
 ## Route Policies
 
-These are the three routing tiers the model classifies into (defined in `backend/services/classifier.py`):
+The three tiers the model classifies into (defined in `backend/services/classifier.py`):
 
-```json
-[
-  {
-    "name": "simple",
-    "description": "Simple factual questions, greetings, basic lookups, yes/no answers, FAQ-style queries, single-step tasks, status checks, straightforward requests"
-  },
-  {
-    "name": "medium",
-    "description": "Multi-step reasoning, summarization of moderate-length text, data extraction, moderate analysis, comparison tasks, troubleshooting, explanations requiring some depth"
-  },
-  {
-    "name": "complex",
-    "description": "Complex multi-document reasoning, deep analysis, legal or financial interpretation, creative writing, code generation, multi-constraint problem solving, liability assessment, comprehensive evaluation"
-  }
-]
-```
+| Tier | Description | Model Tier | Cost |
+|------|-------------|-----------|------|
+| simple | FAQs, status checks, basic lookups | gpt-4o-mini, gemini-flash | $0.10-0.60/M tokens |
+| medium | Multi-step reasoning, comparisons, troubleshooting | gpt-4o, claude-sonnet | $2.50-15.00/M tokens |
+| complex | Multi-document analysis, legal/financial reasoning | gemini-2.5-pro, claude-sonnet | $2.50-15.00/M tokens |
+
+Correctly routing simple queries to cheap models instead of premium ones is the core value proposition. The stock model's 14% medium accuracy means it wastes money routing mid-tier queries to expensive models. Our fine-tune's 86% medium accuracy captures those savings.
 
 ## References
 
-- [Arch-Router-1.5B on HuggingFace](https://huggingface.co/katanemo/Arch-Router-1.5B) — base model
+- [Arch-Router-1.5B](https://huggingface.co/katanemo/Arch-Router-1.5B) — base model
 - [Qwen2.5-1.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct) — foundation model
 - [Unsloth](https://github.com/unslothai/unsloth) — training framework
-- [Unsloth GRPO Blog](https://unsloth.ai/blog/r1-reasoning) — GRPO methodology and examples
-- [TRL GRPOTrainer](https://huggingface.co/docs/trl/main/en/grpo_trainer) — training library
+- [TRL GRPOTrainer](https://huggingface.co/docs/trl/main/en/grpo_trainer) — GRPO implementation
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) — GGUF inference engine
