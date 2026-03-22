@@ -1,19 +1,19 @@
-Samsung Electronics America — Care+ Warranty Intelligence Platform Agreement
-Contract ID: SEA-2026-3301
-Effective Date: March 1, 2026
+# Samsung Electronics America — Care+ Warranty Intelligence Platform Agreement
+## Contract ID: SEA-2026-3301
+## Effective Date: March 1, 2026
 
-PARTIES
+## PARTIES
 This agreement is entered between Assurant, Inc. (acting through its subsidiary
 Technology Insurance Company, Inc.) ("Provider") and Samsung Electronics America,
 Inc. ("Customer") for the deployment of AI-powered warranty intelligence and claims
 support services under the Samsung Care+ device protection program.
 
-SECTION 1 — SERVICE DESCRIPTION
+## SECTION 1 — SERVICE DESCRIPTION
 Provider shall deploy an AI-powered Warranty Intelligence Platform ("Platform") for
 Samsung Electronics America's Samsung Care+ device protection program. The Platform
 shall support the following functions:
 
-1.1 Tier 1 — End-User Self-Service Assistant
+### 1.1 Tier 1 — End-User Self-Service Assistant
     An AI-powered chatbot serving Samsung Care+ subscribers directly, handling:
     - Claim eligibility screening and deductible lookup
     - Guided device damage triage (physical damage, liquid damage, screen failure)
@@ -21,14 +21,14 @@ shall support the following functions:
     - Repair vs. replace recommendation for enrolled devices
     - Appointment scheduling for Samsung-authorized repair centers
 
-1.2 Tier 2 — Internal Agent Assist
+### 1.2 Tier 2 — Internal Agent Assist
     An AI-powered assistant for Samsung Care+ claims agents and technicians, handling:
     - AI-generated claim history summaries across multi-device enrollments
     - Device service record synthesis spanning up to 40 pages of documentation
     - Coverage and policy clarification for complex bundled plans
     - Escalation drafting for disputed claims
 
-1.3 Galaxy AI Feature Support Routing
+### 1.3 Galaxy AI Feature Support Routing
     A specialized classification layer that identifies when a customer query concerns
     Samsung Galaxy AI features (including but not limited to: Circle to Search,
     Live Translate, Call Summary, Now Brief, Generative Edit, Sketch to Image,
@@ -36,7 +36,7 @@ shall support the following functions:
     Queries in this category shall be routed with elevated model capability
     requirements per Section 4.4.
 
-SECTION 2 — DATA HANDLING AND PRIVACY
+## SECTION 2 — DATA HANDLING AND PRIVACY
 2.1 All data processed under this agreement is classified as containing PII
     (device owner identity, contact details, billing information) and device-linked
     identifiers (IMEI numbers, serial numbers, Samsung Account IDs, repair history).
@@ -66,7 +66,7 @@ SECTION 2 — DATA HANDLING AND PRIVACY
     days advance notice. Provider must produce routing logs showing which AI provider
     processed each request category within 5 business days of such a request.
 
-SECTION 3 — APPROVED AI PROVIDERS
+## SECTION 3 — APPROVED AI PROVIDERS
 3.1 Samsung Electronics America approves the following AI model providers for use
     under this agreement:
     - Anthropic (Claude model family)
@@ -93,7 +93,7 @@ SECTION 3 — APPROVED AI PROVIDERS
     records (provider used, model tier, request classification) for a minimum of
     90 days.
 
-SECTION 4 — PERFORMANCE REQUIREMENTS
+## SECTION 4 — PERFORMANCE REQUIREMENTS
 4.1 Tier 1 — End-User Self-Service Performance Targets
     4.1.1 Standard queries (eligibility checks, deductible lookup, claim status):
           Response delivery within 1500ms at the 95th percentile.
@@ -126,7 +126,7 @@ SECTION 4 — PERFORMANCE REQUIREMENTS
 4.5 Supported languages: English, Spanish, Korean.
     All three languages must be supported across both Tier 1 and Tier 2.
 
-SECTION 5 — COST AND BILLING
+## SECTION 5 — COST AND BILLING
 5.1 Samsung Electronics America operates under a tiered cost model reflecting the
     different value requirements of each service tier:
     - Tier 1 (End-User Self-Service): cost efficiency is a primary optimization
@@ -155,7 +155,7 @@ SECTION 5 — COST AND BILLING
     Tier 1 simple queries. Provider shall not default to premium model tiers for
     routine eligibility and status checks.
 
-SECTION 6 — USE CASE SPECIFICATIONS
+## SECTION 6 — USE CASE SPECIFICATIONS
 6.1 Tier 1 — End-User Self-Service
     Primary use cases:
     (a) Samsung Care+ claim eligibility and deductible lookup

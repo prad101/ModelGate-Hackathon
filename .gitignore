@@ -59,3 +59,5 @@ Day 1 organizer presentations.md
 *.log
 .pytest_cache/
 screenshots/
+unsloth_compiled_cache/
+frontend/.playwright-tmp/

@@ -1,29 +1,72 @@
-# ModelGate Arch-Router Fine-Tuning
+---
+language:
+  - en
+license: apache-2.0
+library_name: llama-cpp-python
+base_model: katanemo/Arch-Router-1.5B
+tags:
+  - routing
+  - grpo
+  - reinforcement-learning
+  - gguf
+  - lora
+  - unsloth
+  - trl
+  - qwen2
+  - llama-cpp
+  - contract-aware
+  - cost-optimization
+  - query-classification
+model_type: qwen2
+pipeline_tag: text-classification
+datasets:
+  - custom
+metrics:
+  - accuracy
+model-index:
+  - name: ModelGate-Router
+    results:
+      - task:
+          type: text-classification
+          name: Query Complexity Classification
+        metrics:
+          - type: accuracy
+            value: 83.3
+            name: Overall Accuracy (held-out, GGUF Q8_0)
+          - type: accuracy
+            value: 85.7
+            name: Medium Tier Accuracy
+          - type: latency
+            value: 62
+            name: Avg Latency (ms, CUDA)
+---
 
-GRPO (Group Relative Policy Optimization) fine-tuning of Arch-Router-1.5B for ModelGate's contract-aware query routing. Classifies incoming queries as **simple**, **medium**, or **complex** to route them to the right model tier.
+# ModelGate-Router
+
+GRPO (Group Relative Policy Optimization) fine-tuned routing model for ModelGate's contract-aware query routing. Based on Arch-Router-1.5B. Classifies incoming queries as **simple**, **medium**, or **complex** to route them to the right model tier.
 
 ## Results
 
 ### Accuracy — Held-Out Eval (54 unseen prompts, zero training overlap)
 
-| Tier | Stock Arch-Router | Our Fine-Tune | Improvement |
+| Tier | Stock Arch-Router | ModelGate-Router | Improvement |
 |------|-------------------|---------------|-------------|
 | Simple (33) | 87.9% | 81.8% | -6.1% |
 | **Medium (14)** | **14.3%** | **85.7%** | **+71.4%** |
 | Complex (7) | 100.0% | 85.7% | -14.3% |
 | **Overall (54)** | **70.4%** | **83.3%** | **+13.0%** |
 
-The stock model misclassifies **86% of medium queries** as complex — routing them to expensive premium models when a mid-tier model would suffice. Our fine-tune fixes this.
+The stock model misclassifies **86% of medium queries** as complex — routing them to expensive premium models when a mid-tier model would suffice. ModelGate-Router fixes this.
 
 ### Latency — GGUF Q8_0 + CUDA (RTX 3080 Laptop)
 
-| Metric | Stock | Our Fine-Tune | Delta |
+| Metric | Stock | ModelGate-Router | Delta |
 |--------|-------|---------------|-------|
 | Avg | 62.6ms | 61.7ms | -0.9ms |
 | P50 | 61.3ms | 60.5ms | -0.8ms |
 | P95 | 67.8ms | 67.3ms | -0.5ms |
 
-**Zero latency overhead.** The fine-tune is actually marginally faster.
+**Zero latency overhead.** ModelGate-Router is actually marginally faster.
 
 ### Latency by Inference Backend
 
@@ -35,7 +78,7 @@ The stock model misclassifies **86% of medium queries** as complex — routing t
 
 ### Quantization Impact on Accuracy
 
-| Backend | Stock Accuracy | Fine-Tune Accuracy |
+| Backend | Stock Accuracy | ModelGate-Router Accuracy |
 |---------|---------------|-------------------|
 | Transformers FP16 | 72.2% | 81.5% |
 | GGUF Q8_0 | 70.4% | 83.3% |
@@ -49,8 +92,8 @@ We trained two variants — one with chain-of-thought reasoning (`<reasoning>` t
 | Variant | Accuracy | Avg Latency | Verdict |
 |---------|----------|-------------|---------|
 | Stock | 72.2% | 196ms | Baseline |
-| **No-CoT Fine-Tune** | **81.5%** | **198ms** | **Best tradeoff** |
-| CoT Fine-Tune | 61.1% | 1,787ms | Overfit, 9x slower |
+| **ModelGate-Router (No-CoT)** | **81.5%** | **198ms** | **Best tradeoff** |
+| ModelGate-Router (CoT) | 61.1% | 1,787ms | Overfit, 9x slower |
 
 The CoT variant actually hurt accuracy on unseen data (overfit to training format) and added ~1.6s of latency per classification. The No-CoT variant is the clear winner.
 
@@ -66,11 +109,11 @@ Qwen/Qwen2.5-1.5B-Instruct           (base LLM, 1.5B params)
      v  Katanemo fine-tune
 katanemo/Arch-Router-1.5B             (general intent routing)
      |
-     v  Our GRPO fine-tune (2.3% of params, LoRA rank 32)
+     v  GRPO fine-tune (2.3% of params, LoRA rank 32)
 ModelGate-Router                       (domain-specific complexity routing)
      |
      v  GGUF Q8_0 quantization
-nocot_arch_router.Q8_0.gguf           (1.6 GB, production-ready)
+ModelGate-Router.Q8_0.gguf            (1.6 GB, production-ready)
 ```
 
 ## Files
@@ -79,9 +122,9 @@ nocot_arch_router.Q8_0.gguf           (1.6 GB, production-ready)
 
 | File | Size | Description |
 |------|------|-------------|
-| `nocot_arch_router.Q8_0.gguf` | 1.6 GB | Production model — GGUF Q8_0, deploy with llama.cpp |
-| `stock_arch_router.Q8_0.gguf` | 1.6 GB | Stock model in GGUF Q8_0, for comparison |
-| `modelgate_arch_router_nocot_lora/` | 157 MB | No-CoT LoRA adapter (best model) |
+| `ModelGate-Router.Q8_0.gguf` | 1.6 GB | ModelGate-Router — GGUF Q8_0, deploy with llama.cpp |
+| `stock_arch_router.Q8_0.gguf` | 1.6 GB | Stock Arch-Router in GGUF Q8_0, for comparison |
+| `ModelGate-Router-LoRA/` | 157 MB | ModelGate-Router LoRA adapter (best model) |
 | `modelgate_arch_router_lora/` | 157 MB | CoT LoRA adapter (for reference only) |
 
 ### Data
@@ -160,14 +203,14 @@ Unlike supervised fine-tuning where you provide input-output pairs, GRPO:
 ```bash
 # Requires: pip install unsloth vllm trl
 python finetuning/grpo_run_nocot.py
-# Output: modelgate_arch_router_nocot_lora/
+# Output: ModelGate-Router-LoRA/
 ```
 
 ### Export to GGUF
 
 ```bash
 python finetuning/export_gguf.py nocot
-# Output: finetuning/nocot_arch_router.Q8_0.gguf
+# Output: finetuning/ModelGate-Router.Q8_0.gguf
 ```
 
 ### Benchmark
@@ -182,13 +225,13 @@ python finetuning/bench_stock_vs_finetune.py
 
 ## Production Deployment
 
-The recommended deployment uses `nocot_arch_router.Q8_0.gguf` with llama.cpp:
+The recommended deployment uses `ModelGate-Router.Q8_0.gguf` with llama.cpp:
 
 ```python
 from llama_cpp import Llama
 
 model = Llama(
-    model_path="finetuning/nocot_arch_router.Q8_0.gguf",
+    model_path="finetuning/ModelGate-Router.Q8_0.gguf",
     n_ctx=512,
     n_gpu_layers=-1,  # All layers on GPU
 )
@@ -215,7 +258,7 @@ The three tiers the model classifies into (defined in `backend/services/classifi
 | medium | Multi-step reasoning, comparisons, troubleshooting | gpt-4o, claude-sonnet | $2.50-15.00/M tokens |
 | complex | Multi-document analysis, legal/financial reasoning | gemini-2.5-pro, claude-sonnet | $2.50-15.00/M tokens |
 
-Correctly routing simple queries to cheap models instead of premium ones is the core value proposition. The stock model's 14% medium accuracy means it wastes money routing mid-tier queries to expensive models. Our fine-tune's 86% medium accuracy captures those savings.
+Correctly routing simple queries to cheap models instead of premium ones is the core value proposition. The stock model's 14% medium accuracy means it wastes money routing mid-tier queries to expensive models. ModelGate-Router's 86% medium accuracy captures those savings.
 
 ## References
 
